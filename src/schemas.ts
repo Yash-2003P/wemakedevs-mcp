@@ -138,7 +138,7 @@ export const HealthCheckResultSchema = z.object({
 
 export const HealthReportSchema = z.object({
   ok: z.boolean(),
-  mode: z.enum(['live', 'offline']),
+  mode: z.enum(['live', 'offline', 'stub']),
   checkedAt: z.string(),
   results: z.array(HealthCheckResultSchema),
 });

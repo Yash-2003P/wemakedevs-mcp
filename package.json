@@ -20,7 +20,8 @@
     "dev": "node --experimental-strip-types src/index.ts",
     "start": "node dist/index.js",
     "test": "npm run build && node --test \"dist/test/*.test.js\"",
-    "health": "npm run build && node dist/src/healthcli.js"
+    "health": "npm run build && node dist/src/healthcli.js",
+    "stub": "node scripts/stub-tinyfish.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.2",

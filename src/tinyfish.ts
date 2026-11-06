@@ -28,6 +28,14 @@ export interface FetchOptions {
 const FETCH_ENDPOINT = 'https://api.fetch.tinyfish.ai';
 const AGENT_RUN_ENDPOINT = 'https://agent.tinyfish.ai/v1/automation/run';
 
+/** Dev/test overrides: point tools at a local TinyFish stub. Never set these in production. */
+function fetchEndpoint(): string {
+  return process.env.TINYFISH_FETCH_BASE_URL ?? FETCH_ENDPOINT;
+}
+function agentEndpoint(): string {
+  return process.env.TINYFISH_AGENT_RUN_URL ?? AGENT_RUN_ENDPOINT;
+}
+
 function resolveApiKey(override?: string): string {
   const key = override ?? process.env.TINYFISH_API_KEY;
   if (!key || key.trim() === '') {
@@ -51,7 +59,7 @@ export async function fetchPages(urls: string[], options: FetchOptions = {}): Pr
 
   let res: Response;
   try {
-    res = await fetchImpl(FETCH_ENDPOINT, {
+    res = await fetchImpl(fetchEndpoint(), {
       method: 'POST',
       headers: { 'X-API-Key': key, 'Content-Type': 'application/json' },
       body: JSON.stringify({ urls, format, ttl }),
@@ -104,7 +112,7 @@ export async function runAgent(options: AgentRunOptions): Promise<unknown> {
 
   let res: Response;
   try {
-    res = await fetchImpl(AGENT_RUN_ENDPOINT, {
+    res = await fetchImpl(agentEndpoint(), {
       method: 'POST',
       headers: { 'X-API-Key': key, 'Content-Type': 'application/json' },
       body: JSON.stringify({ url, goal, output_schema: outputSchema }),

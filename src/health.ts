@@ -154,5 +154,6 @@ export async function runHealthChecks(opts: HealthOptions = {}): Promise<HealthR
 
   const results = await Promise.all(checks);
   const ok = results.every((r) => r.ok || r.soft);
-  return { ok, mode: opts.offline ? 'offline' : 'live', checkedAt: new Date().toISOString(), results };
+  const mode = opts.offline ? 'offline' : process.env.TINYFISH_FETCH_BASE_URL ? 'stub' : 'live';
+  return { ok, mode, checkedAt: new Date().toISOString(), results };
 }

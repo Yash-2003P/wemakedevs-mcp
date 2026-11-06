@@ -123,3 +123,18 @@ npm test          # builds, then runs parser unit tests against test/fixtures/*
 ## License
 
 MIT
+
+## Try it without a TinyFish key (local stub)
+
+For demos and development you can run every tool against committed fixtures — clearly labeled, **not TinyFish, not live web**:
+
+```bash
+npm ci && npm run build
+npm run stub &                       # frozen fixtures on 127.0.0.1:8788
+TINYFISH_API_KEY=stub \
+TINYFISH_FETCH_BASE_URL=http://127.0.0.1:8788 \
+TINYFISH_AGENT_RUN_URL=http://127.0.0.1:8788/v1/automation/run \
+node dist/src/index.js               # stdio MCP server, fully backed by fixtures
+```
+
+Every tool works here EXCEPT the data is frozen (2026-11-05 snapshot) and `health_check` reports `mode: "stub"`. For real use set `TINYFISH_API_KEY` and drop the two `*_BASE_URL/RUN_URL` overrides. The stub never runs in production — overrides are opt-in only.
