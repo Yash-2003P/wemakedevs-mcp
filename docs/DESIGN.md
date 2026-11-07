@@ -110,7 +110,7 @@ Live result on 2026-11-07: 9/9 green, 35 events parsed from the rendered DOM, al
 - Diff logic: baseline creation, added/removed/field-level changes, single-event scope.
 - Meetups, careers, scholarships, detail AST, FAQ, meta strip, HTML-leak check.
 
-Not covered by unit tests: live TinyFish response shapes, live latency, Agent output. These were verified manually through a stdio MCP client on 2026-11-07 (16 tools listed; Fetch tools returned live data; Agent returned `state=open`, `registeredCount=7689` in 39 s; live health 9/9).
+Not covered by unit tests: live TinyFish response shapes, live latency, Agent output. These were verified manually through a stdio MCP client on 2026-11-07 (16 tools listed; Fetch tools returned live data; Agent returned `state=open` with `registeredCount` 7,689–7,694 in 39–62 s; live health 9/9).
 
 ## 9. Error model
 
@@ -124,7 +124,7 @@ Not covered by unit tests: live TinyFish response shapes, live latency, Agent ou
 - `/careers` can legitimately be empty; the tool returns `[]` with a note.
 - Archive events (archive.wemakedevs.org) are listed and parseable as detail pages, best-effort fidelity.
 - External events (devpost/Luma) listed with URLs; `get_hackathon` refuses non-WeMakeDevs hosts.
-- Agent latency is 20–120 s; clients need a matching request timeout. Live run: 39 s.
+- Agent latency is 20–120 s; clients need a matching request timeout. Live runs: 39 s, 41 s and 62 s (the last exceeds the SDK's default 60 s).
 - TinyFish Agent `output_schema` rejects `additionalProperties` and `description`; only the minimal subset is sent.
 - Snapshot diffs are per-machine (`~/.cache/wemakedevs-mcp` by default); there is no shared server-side history.
 - Fixture snapshot is 2026-11-05; parser tests can rot as the site changes — CI health check is the live guard.

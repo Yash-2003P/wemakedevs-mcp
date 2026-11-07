@@ -7,15 +7,38 @@ Bounty: Turn a website with no public API into a permanent agent tool (MCP serve
 - [x] Repo with working build + README (from-source install; npm package not published)
 - [x] 16 typed MCP tools, zod-validated inputs and outputs
 - [x] Live TinyFish **Fetch** path verified against every page (ttl: 0, no canned data)
-- [x] Live TinyFish **Agent** path verified (`check_registration_status`: state=open, closes Nov 7 2026, 7,689 registered, 39 s)
+- [x] Live TinyFish **Agent** path verified (`check_registration_status`: state=open, 7,689–7,694 registered across runs, 39–62 s)
 - [x] Live `npm run health` → **9/9 green**; offline health → 9/9 green
 - [x] Unit tests → **20/20 green**
+- [x] Clean-clone check: `npm ci` → build → 20/20 tests → 9/9 offline health
+- [x] Reusable live smoke client: `npm run smoke` (15 fast tools) and `npm run smoke:all` (16/16, Agent included)
 - [x] Real multi-step run through a stdio MCP client (list → detail → schedule → resources → registration), captured in full at [docs/DEMO.md](DEMO.md) — all 16 tools live-exercised across the verification session
 - [x] LinkedIn and Discord post drafts → [docs/POSTS.md](POSTS.md) (publish after the repo has a public URL)
 - [ ] Push the repo to GitHub and add the public link
 - [ ] **LinkedIn post about the build, tagging TinyFish** (required)
 - [ ] Share it in **#showcase** on the TinyFish Discord
 - [ ] Optional: publish to npm so `npx wemakedevs-mcp` works
+
+## Create the public repo (you)
+
+The local branch is now `main`, so the CI workflow actually runs on push. The working tree is clean and the build is verified from a clean clone.
+
+If the repo does not exist yet:
+
+```bash
+cd /home/vish9/wemakedevs-mcp
+gh repo create Yash-2003P/wemakedevs-mcp --public --source=. --remote=origin --push
+```
+
+If you create it in the browser, then:
+
+```bash
+cd /home/vish9/wemakedevs-mcp
+git remote add origin https://github.com/<owner>/wemakedevs-mcp.git
+git push -u origin main
+```
+
+After the push, replace the README clone placeholder and the `[REPO_LINK]` / `[DEMO_LINK]` placeholders in [docs/POSTS.md](POSTS.md) with the public URLs.
 
 ## What the submission notes must say
 

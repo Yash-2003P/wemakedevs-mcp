@@ -15,7 +15,7 @@ WeMakeDevs runs 30+ hackathons a year, meetups in 9+ cities, community scholarsh
 The package is **not published to npm yet**, so the commands below run the built server directly. Requires Node.js ≥ 20 and a TinyFish API key ([get one](https://agent.tinyfish.ai/api-keys)).
 
 ```bash
-git clone <this-repo> wemakedevs-mcp
+git clone <the URL of this repository> wemakedevs-mcp
 cd wemakedevs-mcp
 npm ci
 npm run build
@@ -37,6 +37,23 @@ claude mcp add wemakedevs-mcp \
 {
   "mcpServers": {
     "wemakedevs": {
+      "command": "node",
+      "args": ["/absolute/path/to/wemakedevs-mcp/dist/src/index.js"],
+      "env": { "TINYFISH_API_KEY": "sk-..." }
+    }
+  }
+}
+```
+
+### VS Code
+
+Add `.vscode/mcp.json` (or run **MCP: Add Server**):
+
+```json
+{
+  "servers": {
+    "wemakedevs": {
+      "type": "stdio",
       "command": "node",
       "args": ["/absolute/path/to/wemakedevs-mcp/dist/src/index.js"],
       "env": { "TINYFISH_API_KEY": "sk-..." }
@@ -128,7 +145,7 @@ Exactly **two** TinyFish endpoints, both load-bearing. No ceremonial calls, no p
 
 `POST https://agent.tinyfish.ai/v1/automation/run` is used **only** for `check_registration_status`: the registration panel renders client-side behind “Loading…”, so a page read sees the placeholder. The agent opens a real browser, waits for the panel, and returns schema-validated JSON (`state`, `opensAt`, `closesAt`, `registeredCount`, `notes`). The goal is strictly read-only: observe, never sign in, register or click an action.
 
-Live lesson baked into the code: TinyFish Agent’s `output_schema` rejects `additionalProperties` and `description`, so the schema is the minimal JSON Schema subset it accepts. A live run took **39 seconds** and returned `state=open`, `closesAt="Nov 7, 2026"`, `registeredCount=7689`.
+Live lesson baked into the code: TinyFish Agent’s `output_schema` rejects `additionalProperties` and `description`, so the schema is the minimal JSON Schema subset it accepts. Live runs took **39 s, 41 s and 62 s**; the first returned `state=open`, `closesAt="Nov 7, 2026"`, `registeredCount=7689`.
 
 Nothing is pre-scraped, cached at bake time, or mocked in the serving path. `TINYFISH_API_KEY` is required; without it every tool fails fast with a clear `CONFIG` error.
 
@@ -167,7 +184,12 @@ Default state file: `~/.cache/wemakedevs-mcp/hackathon-snapshots.json`. Override
 ```bash
 npm ci
 npm test          # builds, then runs 20 unit tests against test/fixtures/*
+
+TINYFISH_API_KEY=sk-... npm run smoke       # live: asserts the 16-tool surface, calls every fast tool
+TINYFISH_API_KEY=sk-... npm run smoke:all   # also the slow Agent call (~40–70 s)
 ```
+
+`npm run smoke` starts the built server over stdio with the real MCP SDK client, checks that all 16 tools are advertised, then calls each one once against the live site. It is the fastest way to verify a fresh install (and doubles as a client example).
 
 `test/fixtures/` holds public page snapshots captured 2026-11-05 (plus the RSS feed, schedule, resources and a blog post). Parser tests assert on those; live drift is caught by `npm run health`, not by silently serving stale data.
 
@@ -175,7 +197,7 @@ npm test          # builds, then runs 20 unit tests against test/fixtures/*
 
 - **Listing dates are inferred from display text.** The site does not expose ISO dates in the rendered listing (scripts are stripped by Fetch). A display date without a year is assumed to be the current year; the site prints a year for other years. `dateText` is always returned verbatim alongside the inferred ISO dates.
 - **The listing parser depends on the card DOM.** If WeMakeDevs redesigns the event cards, `health_check` fails with the exact check and reason instead of returning partial garbage.
-- **Agent latency is 20–120 s.** MCP clients must allow a request timeout of at least ~120 s for `check_registration_status`; the server itself has no timeout. The live run completed in 39 s.
+- **Agent latency is 20–120 s.** MCP clients must allow a request timeout of at least ~120 s for `check_registration_status`; the server itself has no timeout. Observed live: 39 s, 41 s and 62 s — the last one exceeds the SDK's default 60 s client timeout. `npm run smoke:all` sets 180 s.
 - **Meetup dates are display text** (“Oct 27”), not ISO; they are excluded from `upcoming_deadlines`.
 - **`/careers` can legitimately be empty.** The live page said “No open roles right now” during the final run; the tool returns `[]` with a note rather than inventing roles.
 - **Archive and external events.** Older events on `archive.wemakedevs.org` are listed and parsed best-effort. External events (Devpost/Luma) are listed with their URLs; `get_hackathon` refuses non-WeMakeDevs hosts by design.
