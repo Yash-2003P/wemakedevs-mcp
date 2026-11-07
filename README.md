@@ -90,32 +90,26 @@ All tools return **structured JSON** (`structuredContent`) validated against zod
 
 ### Real multi-step run (live, 2026-11-07)
 
+A fresh OpenCode session asked: *"I want to enter a WeMakeDevs hackathon this month."* It found and chained seven tools:
+
 ```
-You: What can I still enter this month, and is the Switch hackathon registration open?
-
-→ list_hackathons({status: "upcoming"})
-  Cloud Native Hackathon  Nov 9–10   Salt Lake City, Utah
-  Festive Hacks           Nov 25     BIEC, Bengaluru
-  Toggle Wars             Nov 26–29  Remote
-
-→ list_hackathons({status: "ongoing"})
-  Flip the Switch Hackathon  Nov 4–7  Remote  "$8000 in prizes…"
-
-→ get_hackathon({hackathon: "switch", sections: ["prizes", "judging"]})
-  prizePool: "$10,000"   when: "Nov 4–7, 2026"   where: "Online, from anywhere"
-  teams: "Solo or up to 4 people"
-
+→ list_hackathons({status: "ongoing"})    1 event   Flip the Switch, Nov 4–7
+→ list_hackathons({status: "upcoming"})   3 events  Cloud Native, Festive Hacks, Toggle Wars
+→ get_hackathon({hackathon: "switch"})    prizePool "$10,000" · Solo or up to 4 · Online
 → get_hackathon_schedule({hackathon: "switch"})
-  6 milestones · submissions close Nov 7, 11:59 PM IST (2026-11-07T23:59+05:30)
-
+  6 milestones · submissions close 2026-11-07T23:59+05:30
 → get_hackathon_resources({hackathon: "switch"})
   5 groups · 21 links · 2 CLI snippets
-
-→ check_registration_status({hackathon: "switch"})        // TinyFish Agent, 39 s
-  { state: "open", closesAt: "Nov 7, 2026", registeredCount: 7689 }
+→ check_registration_status({hackathon: "switch"})   // TinyFish Agent, ≈41 s
+  { state: "open", registeredCount: 7690, closesAt: null }
+→ search_blog({query: "switch"})          1 post
 ```
 
-The same run also exercised `list_blog_posts`, `search_blog`, `get_blog_post`, `latest_updates`, `upcoming_deadlines`, `get_hackathon_changes`, `list_meetups`, `list_open_roles`, `list_scholarships` and `health_check` against the live site.
+The full log — tool outputs, tables, the 21 resolved resource links and the agent's verbatim final answer — is in **[docs/DEMO.md](docs/DEMO.md)**.
+
+The run surfaced a real site inconsistency: the listing card says `$8000` while the detail page says `$10,000`. The agent reported both and refused to pick one; the tools return each source verbatim rather than silently normalizing it.
+
+Across the verification session, **all 16 tools** were exercised against the live site through a real MCP stdio client (including `get_hackathon_rules`, `get_blog_post`, `latest_updates`, `upcoming_deadlines`, `get_hackathon_changes`, `list_meetups`, `list_open_roles`, `list_scholarships` and `health_check`).
 
 ## How TinyFish is used
 

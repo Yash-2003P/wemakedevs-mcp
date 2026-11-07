@@ -10,7 +10,8 @@ Bounty: Turn a website with no public API into a permanent agent tool (MCP serve
 - [x] Live TinyFish **Agent** path verified (`check_registration_status`: state=open, closes Nov 7 2026, 7,689 registered, 39 s)
 - [x] Live `npm run health` → **9/9 green**; offline health → 9/9 green
 - [x] Unit tests → **20/20 green**
-- [x] Real multi-step run through a stdio MCP client (list → detail → schedule → resources → registration)
+- [x] Real multi-step run through a stdio MCP client (list → detail → schedule → resources → registration), captured in full at [docs/DEMO.md](DEMO.md) — all 16 tools live-exercised across the verification session
+- [x] LinkedIn and Discord post drafts → [docs/POSTS.md](POSTS.md) (publish after the repo has a public URL)
 - [ ] Push the repo to GitHub and add the public link
 - [ ] **LinkedIn post about the build, tagging TinyFish** (required)
 - [ ] Share it in **#showcase** on the TinyFish Discord
