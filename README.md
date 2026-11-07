@@ -4,7 +4,7 @@ An MCP (Model Context Protocol) server that turns **wemakedevs.org** — a site 
 
 > Built for the TinyFish “Site → MCP” bounty. Not affiliated with WeMakeDevs.
 
-**Live status (2026-11-07):** `npm run health` → **9/9 checks green** against the live site; 20 unit tests green; every tool below exercised through a real MCP stdio client.
+**Live status (2026-11-07):** `npm run health` → **9/9 checks green** against the live site; 26 unit tests green; every tool below exercised through a real MCP stdio client, and the HTTP transport exercised with the SDK's Streamable HTTP client.
 
 ## Why this exists
 
@@ -80,7 +80,55 @@ Add `.vscode/mcp.json` (or run **MCP: Add Server**):
 
 ### ChatGPT
 
-ChatGPT connectors expect a **remote HTTP MCP endpoint**; this repo ships the standard **stdio** transport. Use it from any stdio-capable client today, or put an HTTP MCP bridge in front of it for ChatGPT. The tools themselves are client-agnostic.
+ChatGPT connectors expect a **remote HTTP MCP endpoint** with no auth or OAuth. This repo ships both the **stdio** transport (default) and an **Streamable HTTP** transport (`src/http.ts`), so the tools are reachable from remote hosts — but a bearer token is the only auth implemented, which is not a ChatGPT connector protocol yet. Use it from any Streamable HTTP client today, or put an OAuth flow (or an HTTP bridge that streamlines this one) in front of it for ChatGPT. The tools themselves are client-agnostic.
+
+### Streamable HTTP (remote clients)
+
+```bash
+npm run build
+HOST=127.0.0.1 PORT=3000 node dist/src/http.js        # loopback, no token
+HOST=0.0.0.0 MCP_HTTP_TOKEN=secret node dist/src/http.js
+```
+
+Endpoint: `POST /mcp` (stateless: no sessions, no standalone SSE). `GET /health` reports liveness and whether a token is required.
+
+Safety defaults:
+
+- Binds `127.0.0.1` unless `HOST` is set, and **refuses to bind a non-loopback address without `MCP_HTTP_TOKEN`**.
+- `Authorization: Bearer <MCP_HTTP_TOKEN>` is compared with `timingSafeEqual`.
+- Requests with an `Origin` header are rejected unless allowlisted (`MCP_HTTP_ORIGINS`); clients that send none (MCP clients, curl) are unaffected.
+- The transport enforces the Host allowlist (DNS-rebinding protection) using the address this process actually listens on, plus any `MCP_HTTP_HOSTS`.
+
+Claude Code, as a remote client:
+
+```bash
+claude mcp add --transport http wemakedevs \
+  -H "Authorization: Bearer $MCP_HTTP_TOKEN" \
+  http://127.0.0.1:3000/mcp
+```
+
+```bash
+curl -s -X POST http://127.0.0.1:3000/mcp \
+  -H "content-type: application/json" \
+  -H "accept: application/json, text/event-stream" \
+  -H "authorization: Bearer $MCP_HTTP_TOKEN" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' | head -c 300
+```
+
+Verify the whole path, including auth rejection:
+
+```bash
+TINYFISH_API_KEY=sk-... npm run smoke:http
+```
+
+| Env var | Default | Meaning |
+|---|---|---|
+| `HOST` | `127.0.0.1` | Bind address. Non-loopback requires a token. |
+| `PORT` | `3000` | Bind port. |
+| `MCP_HTTP_TOKEN` | *(unset)* | Required bearer token. Unset = loopback-only, no auth. |
+| `MCP_HTTP_HOSTS` | *(unset)* | Extra allowed `Host` header values (comma-separated), e.g. behind a proxy. |
+| `MCP_HTTP_ORIGINS` | *(unset)* | Extra allowed `Origin` values (comma-separated). |
+| `MCP_HTTP_MAX_BODY_BYTES` | `4194304` | Maximum POST body size. |
 
 ## Tools
 
@@ -187,6 +235,7 @@ npm test          # builds, then runs 20 unit tests against test/fixtures/*
 
 TINYFISH_API_KEY=sk-... npm run smoke       # live: asserts the 16-tool surface, calls every fast tool
 TINYFISH_API_KEY=sk-... npm run smoke:all   # also the slow Agent call (~40–70 s)
+TINYFISH_API_KEY=sk-... npm run smoke:http  # starts the Streamable HTTP server, checks auth + a live call
 ```
 
 `npm run smoke` starts the built server over stdio with the real MCP SDK client, checks that all 16 tools are advertised, then calls each one once against the live site. It is the fastest way to verify a fresh install (and doubles as a client example).
@@ -203,6 +252,9 @@ TINYFISH_API_KEY=sk-... npm run smoke:all   # also the slow Agent call (~40–70
 - **Archive and external events.** Older events on `archive.wemakedevs.org` are listed and parsed best-effort. External events (Devpost/Luma) are listed with their URLs; `get_hackathon` refuses non-WeMakeDevs hosts by design.
 - **Node package not published.** Install from source until an npm release exists.
 - **Health sentinel** defaults to `switch`; override with `HEALTH_SENTINEL_SLUG` if that page is retired.
+- **The HTTP transport is stateless and POST-only.** No sessions, no standalone SSE stream, no resumability (Ch 5 territory, deliberately out for a read-only tool set). Each POST spawns a short-lived `McpServer`.
+- **Auth is a bearer token only.** That covers Claude Code's `-H` header and other Streamable HTTP clients; it is **not** the OAuth flow ChatGPT connectors expect. No OAuth server is implemented.
+- **Browser CORS is closed by default.** A request with an unblessed `Origin` gets 403; allow browser origins explicitly with `MCP_HTTP_ORIGINS`.
 
 ## Try it without a TinyFish key (local stub)
 

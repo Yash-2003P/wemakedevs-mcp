@@ -27,7 +27,7 @@ The fun part was the live surprises. Fetch strips `<script>`, so the Next.js pay
 
 The live site even disagrees with itself: the listing card says $8000, the detail page says $10,000. The agent reported both instead of quietly picking one.
 
-16 tools · 20 unit tests · 9/9 live health checks · a real end-to-end transcript in the repo.
+16 tools · 26 unit tests · 9/9 live health checks · a real end-to-end transcript in the repo · stdio by default, optional Streamable HTTP with bearer auth.
 
 Built with TypeScript, `@modelcontextprotocol/sdk`, zod and cheerio.
 

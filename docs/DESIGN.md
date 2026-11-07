@@ -2,7 +2,7 @@
 
 An MCP (Model Context Protocol) server that turns wemakedevs.org — a site with no documented public API — into typed agent tools. Hackathons, timelines, resource hubs, rules, blogs, meetups, scholarships and careers become structured JSON for any MCP client. TinyFish does the real web work behind every tool at run time.
 
-Status: **implemented and live-verified on 2026-11-07**. 16 tools, 20 unit tests, 9/9 live health checks green, every tool exercised through a real MCP stdio client against TinyFish Fetch and Agent.
+Status: **implemented and live-verified on 2026-11-07**. 16 tools, 26 unit tests, 9/9 live health checks green, every tool exercised through a real MCP stdio client against TinyFish Fetch and Agent, plus a live pass over the new Streamable HTTP transport.
 
 ## 1. Problem
 
@@ -25,27 +25,33 @@ From the TinyFish "Site → MCP" rules (v2026-11):
 3. **Read the rendered DOM, not the flight payload.** wemakedevs.org is Next.js, but live Fetch strips `<script>` blocks even with `include_selectors: ["body"]`, so `self.__next_f` / `"cards"` is unreachable. Verbatim body mode does preserve the server-rendered cards, section ids, FAQ `<details>` and resource links. The listing parser therefore reads card anchors (`<a><h3>title</h3><p>prize</p></a>` plus location/date chips) and converts display dates to ISO. The site prints a year only for non-current years, so a yearless display date means the current year; this is reported in output notes.
 4. **Loud failure everywhere.** All outputs zod-validated; any schema mismatch is a typed error (`SITE_CHANGED | VALIDATION_FAILED | FETCH_FAILED | AGENT_FAILED | NOT_FOUND | CONFIG | PARSE_FAILED`) with a hint pointing at `npm run health`. MCP responses set `isError: true`.
 5. **Leaderboard honesty.** 2 endpoints ≈ 100 pts. Adding more would be padding; deliberately not done.
+6. **stdio by default, Streamable HTTP opt-in.** `src/index.ts` stays stdio because that is what Claude Code/Desktop, Cursor, Zed and OpenCode speak. `src/http.ts` adds Streamable HTTP (`POST /mcp`, stateless, one short-lived `McpServer` per request, JSON responses) for remote hosts. The gap it closes is real (a TCP listener, not a bridge), the auth is a bearer token, and the safety defaults are: loopback bind, refusing a non-loopback bind without `MCP_HTTP_TOKEN`, `timingSafeEqual` comparison, Origin allowlist, and the transport's own Host allowlist for DNS-rebinding protection. OAuth is deliberately out of scope, so ChatGPT connectors still need a proxy — that is stated, not hidden.
 
 ## 4. Architecture
 
 ```text
-MCP client (stdio)
-   │  set TINYFISH_API_KEY
-   ▼
-src/index.ts ── registerTools(src/tools.ts)
-   │  per tool: zod input → handler → zod output → {content[JSON], structuredContent}
-   ├── src/tinyfish.ts     Fetch client (POST api.fetch.tinyfish.ai, ttl:0, per-URL errors surfaced)
-   │                        Agent client (POST agent.tinyfish.ai/v1/automation/run, output_schema)
-   ├── src/parse.ts        page parsers (all take html, return typed objects, throw SITE_CHANGED)
-   ├── src/extract.ts      flight-data `cards` extractor (kept as a fast path if scripts ever return)
-   ├── src/diff.ts         snapshot persistence + pure diff for get_hackathon_changes
-   ├── src/health.ts       health checks (live via Fetch, offline via committed fixtures)
-   └── src/healthcli.ts    `npm run health` CLI (JSON report, exit 1 on failure)
+MCP client ── stdio ───────────── src/index.ts   ─┐
+           └─ Streamable HTTP ── src/http.ts    ─┴─ registerTools(src/tools.ts)
+    │  set TINYFISH_API_KEY
+    ▼
+    │  per tool: zod input → handler → zod output → {content[JSON], structuredContent}
+    ├── src/tinyfish.ts     Fetch client (POST api.fetch.tinyfish.ai, ttl:0, per-URL errors surfaced)
+    │                        Agent client (POST agent.tinyfish.ai/v1/automation/run, output_schema)
+    ├── src/parse.ts        page parsers (all take html, return typed objects, throw SITE_CHANGED)
+    ├── src/extract.ts      flight-data `cards` extractor (kept as a fast path if scripts ever return)
+    ├── src/diff.ts         snapshot persistence + pure diff for get_hackathon_changes
+    ├── src/health.ts       health checks (live via Fetch, offline via committed fixtures)
+    └── src/healthcli.ts    `npm run health` CLI (JSON report, exit 1 on failure)
 test/parse.test.ts         parser tests against committed fixtures (node:test)
 test/diff.test.ts          display-date and snapshot-diff tests
+test/http.test.ts          Streamable HTTP transport: routing, 401/403, 16 tools over the wire
 test/fixtures/*.html       public pages snapshot 2026-11-05 + RSS/schedule/resources/blog post
 scripts/stub-tinyfish.mjs  opt-in local stub (frozen fixtures, NOT TinyFish)
+scripts/smoke.mjs         live smoke test: stdio, all 16 tools (npm run smoke / smoke:all)
+scripts/smoke-http.mjs    live smoke test: HTTP transport, auth + a real tool call
 ```
+
+Both transports register the same 16 tools; `src/http.ts` is a stateless wrapper (one short-lived `McpServer` per POST) and never touches tool logic.
 
 Tool call flow: `fetchPages(url, {includeSelectors:['body']})` → `results[0].text` (HTML) → parser → zod → result. Agent flow: `runAgent(url, goal, output_schema)` → zod-validate → result.
 
@@ -102,13 +108,15 @@ Live result on 2026-11-07: 9/9 green, 35 events parsed from the rendered DOM, al
 
 ## 8. Testing state
 
-`npm test` → 20 tests, all green:
+`npm test` → 26 tests, all green:
 
 - Hackathon flight extraction/dedupe/status classification (frozen "now" = 2026-11-05).
 - Display-date parsing: single day, same-month range, cross-month range, month-only, explicit year.
 - End-of-day inclusivity for date-only end dates.
 - Diff logic: baseline creation, added/removed/field-level changes, single-event scope.
 - Meetups, careers, scholarships, detail AST, FAQ, meta strip, HTML-leak check.
+- Streamable HTTP: `/health` shape, 16 tools over the wire via the SDK client, 404/405 routing, 403 on an unblessed Origin, 401 for a missing/wrong bearer token, and the refusal to bind a non-loopback address without a token.
+- `npm run smoke` / `npm run smoke:all` (stdio, all 16 tools, live) and `npm run smoke:http` (HTTP transport, auth + one live tool call) are exercised manually, not in CI.
 
 Not covered by unit tests: live TinyFish response shapes, live latency, Agent output. These were verified manually through a stdio MCP client on 2026-11-07 (16 tools listed; Fetch tools returned live data; Agent returned `state=open` with `registeredCount` 7,689–7,694 in 39–62 s; live health 9/9).
 
@@ -128,13 +136,15 @@ Not covered by unit tests: live TinyFish response shapes, live latency, Agent ou
 - TinyFish Agent `output_schema` rejects `additionalProperties` and `description`; only the minimal subset is sent.
 - Snapshot diffs are per-machine (`~/.cache/wemakedevs-mcp` by default); there is no shared server-side history.
 - Fixture snapshot is 2026-11-05; parser tests can rot as the site changes — CI health check is the live guard.
+- The Streamable HTTP transport is stateless and POST-only: no sessions, no standalone SSE stream, no resumability. Each POST spawns a short-lived `McpServer`.
+- HTTP auth is a bearer token only (`MCP_HTTP_TOKEN`, `timingSafeEqual`). It is not the OAuth flow ChatGPT connectors expect, so a ChatGPT connector still needs a proxy. Browser CORS is closed by default (unblessed `Origin` → 403).
 - Package is not published to npm; install from source.
 
 ## 11. Submission state vs bounty checklist
 
-Done: repo, README (install, 16-tool table, real live transcript, TinyFish usage, health docs, limitations), git history, LICENSE, SUBMISSION.md checklist, CI (build/test/offline health), weekly live health workflow, .env.example, live-verified Fetch and Agent, live 9/9 health, real multi-step stdio run.
+Done: repo, README (stdio + Streamable HTTP install, 16-tool table, real live transcript, TinyFish usage, health docs, limitations), git history, LICENSE, SUBMISSION.md checklist, CI (build/test/offline health), weekly live health workflow, .env.example, live-verified Fetch and Agent, live 9/9 health, real multi-step stdio run, Streamable HTTP transport with bearer auth + Origin/Host protection, live smoke tests for both transports.
 
-Not done: GitHub repo creation & push; LinkedIn post tagging TinyFish; #showcase Discord post; npm publish.
+Not done: GitHub repo creation & push; LinkedIn post tagging TinyFish; #showcase Discord post; npm publish; OAuth flow for ChatGPT connectors.
 
 ## 12. Risks
 

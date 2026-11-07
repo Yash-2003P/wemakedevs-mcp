@@ -12,12 +12,14 @@ Bounty: Turn a website with no public API into a permanent agent tool (MCP serve
 - [x] Unit tests → **20/20 green**
 - [x] Clean-clone check: `npm ci` → build → 20/20 tests → 9/9 offline health
 - [x] Reusable live smoke client: `npm run smoke` (15 fast tools) and `npm run smoke:all` (16/16, Agent included)
+- [x] Streamable HTTP transport (`src/http.ts`, `npm run start:http`): stateless `POST /mcp`, bearer auth, Origin/Host protection; `npm run smoke:http` green including a live tool call; 6 unit tests
 - [x] Real multi-step run through a stdio MCP client (list → detail → schedule → resources → registration), captured in full at [docs/DEMO.md](DEMO.md) — all 16 tools live-exercised across the verification session
 - [x] LinkedIn and Discord post drafts → [docs/POSTS.md](POSTS.md) (publish after the repo has a public URL)
 - [ ] Push the repo to GitHub and add the public link
 - [ ] **LinkedIn post about the build, tagging TinyFish** (required)
 - [ ] Share it in **#showcase** on the TinyFish Discord
 - [ ] Optional: publish to npm so `npx wemakedevs-mcp` works
+- [ ] Optional: OAuth flow in front of the HTTP transport for ChatGPT connectors
 
 ## Create the public repo (you)
 
@@ -47,6 +49,7 @@ After the push, replace the README clone placeholder and the `[REPO_LINK]` / `[D
 - No canned data in the serving path; fixtures are used only by unit tests and the opt-in local stub. The undocumented `wemakedevs-server.onrender.com` backend is never called.
 - `health_check` detects site changes and fails loudly with the exact check and reason.
 - 2 TinyFish endpoints, both load-bearing (no padding) → 100 leaderboard points.
+- Two MCP transports, one tool surface: stdio (`src/index.ts`) and Streamable HTTP (`src/http.ts`), identical 16 tools.
 
 ## Talking points for the post/demo
 

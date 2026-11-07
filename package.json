@@ -23,7 +23,9 @@
     "health": "npm run build && node dist/src/healthcli.js",
     "stub": "node scripts/stub-tinyfish.mjs",
     "smoke": "npm run build && node scripts/smoke.mjs",
-    "smoke:all": "npm run build && node scripts/smoke.mjs --all"
+    "smoke:all": "npm run build && node scripts/smoke.mjs --all",
+    "start:http": "node dist/src/http.js",
+    "smoke:http": "npm run build && node scripts/smoke-http.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.2",
