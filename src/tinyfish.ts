@@ -20,6 +20,8 @@ export interface FetchOptions {
   format?: 'html' | 'markdown' | 'json';
   /** Seconds of cache freshness to accept. 0 = always live (default for this server). */
   ttl?: number;
+  /** CSS selectors whose matched content is returned VERBATIM (bypasses boilerplate removal). */
+  includeSelectors?: string[];
   apiKey?: string;
   /** Injected for tests; defaults to global fetch. */
   fetchImpl?: typeof fetch;
@@ -54,7 +56,7 @@ function resolveApiKey(override?: string): string {
  */
 export async function fetchPages(urls: string[], options: FetchOptions = {}): Promise<FetchOutput> {
   if (urls.length === 0) return { results: [], errors: [] };
-  const { format = 'html', ttl = 0, apiKey, fetchImpl = fetch } = options;
+  const { format = 'html', ttl = 0, apiKey, includeSelectors, fetchImpl = fetch } = options;
   const key = resolveApiKey(apiKey);
 
   let res: Response;
@@ -62,7 +64,7 @@ export async function fetchPages(urls: string[], options: FetchOptions = {}): Pr
     res = await fetchImpl(fetchEndpoint(), {
       method: 'POST',
       headers: { 'X-API-Key': key, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ urls, format, ttl }),
+      body: JSON.stringify(includeSelectors ? { urls, format, ttl, include_selectors: includeSelectors } : { urls, format, ttl }),
     });
   } catch (err) {
     throw new WemakedevsError('FETCH_FAILED', `TinyFish Fetch request failed: ${(err as Error).message}`, {

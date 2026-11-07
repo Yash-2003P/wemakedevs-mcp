@@ -1,11 +1,11 @@
 {
   "name": "wemakedevs-mcp",
   "version": "0.1.0",
-  "description": "MCP server that turns wemakedevs.org (hackathons, meetups, scholarships, careers) into typed agent tools. TinyFish reads the live site; no canned data.",
+  "description": "16 typed MCP tools for wemakedevs.org \u2014 hackathons, timelines, resources, rules, blogs, meetups, scholarships and careers \u2014 read live via TinyFish. No canned data.",
   "license": "MIT",
   "type": "module",
   "bin": {
-    "wemakedevs-mcp": "./dist/index.js"
+    "wemakedevs-mcp": "./dist/src/index.js"
   },
   "files": [
     "dist",
@@ -18,7 +18,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "node --experimental-strip-types src/index.ts",
-    "start": "node dist/index.js",
+    "start": "node dist/src/index.js",
     "test": "npm run build && node --test \"dist/test/*.test.js\"",
     "health": "npm run build && node dist/src/healthcli.js",
     "stub": "node scripts/stub-tinyfish.mjs"
@@ -35,9 +35,11 @@
   "keywords": [
     "mcp",
     "model-context-protocol",
+    "mcp-server",
     "tinyfish",
     "wemakedevs",
     "hackathons",
+    "blogs",
     "agent-tools"
   ]
 }

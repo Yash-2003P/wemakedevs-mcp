@@ -1,0 +1,242 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:dc="http://purl.org/dc/elements/1.1/">
+  <channel>
+    <title>WeMakeDevs Blog</title>
+    <link>https://www.wemakedevs.org/blogs</link>
+    <description>Engineering deep dives, community stories and event recaps from the WeMakeDevs community.</description>
+    <language>en</language>
+    <lastBuildDate>Thu, 29 Oct 2026 00:00:00 GMT</lastBuildDate>
+    <atom:link href="https://www.wemakedevs.org/blogs/rss.xml" rel="self" type="application/rss+xml" />
+    <docs>https://www.wemakedevs.org/blogs</docs>
+    <item>
+      <title>How to Build a Switch Workflow That Finishes a Real Task</title>
+      <link>https://www.wemakedevs.org/blogs/how-to-build-a-switch-workflow-that-finishes-a-real-task</link>
+      <guid isPermaLink="true">https://www.wemakedevs.org/blogs/how-to-build-a-switch-workflow-that-finishes-a-real-task</guid>
+      <pubDate>Thu, 29 Oct 2026 00:00:00 GMT</pubDate>
+      <description>Learn how to build reliable, multi-agent workflows with Switch for the Flip the Switch Hackathon. This guide walks through Upgrade Desk, a real-world demo for automating dependency upgrades with human approval, and covers agent coordination, room instructions, debugging, and testing your workflow before submission.</description>
+      <dc:creator>Aayush Sharma</dc:creator>
+      <category>hackathon</category>
+      <category>wemakedevs</category>
+      <category>switch</category>
+      <enclosure url="https://raw.githubusercontent.com/WeMakeDevs/blogs/main/images/how-to-build-a-switch-workflow-that-finishes-a-real-task/cover.png?v=06f64aaec280cd7896a03e752a8ea27da2010cea" type="image/png" length="0" />
+    </item>
+    <item>
+      <title>No Hands: The Wispr Challenge is open</title>
+      <link>https://www.wemakedevs.org/blogs/wispr</link>
+      <guid isPermaLink="true">https://www.wemakedevs.org/blogs/wispr</guid>
+      <pubDate>Fri, 16 Oct 2026 00:00:00 GMT</pubDate>
+      <description>A two-week hackathon from WeMakeDevs and Wispr Flow. Build something that solves a problem in your own work, speak instead of type, and compete for ₹3 lakh in prizes.</description>
+      <dc:creator>Kunal Kushwaha</dc:creator>
+      <category>hackathon</category>
+      <category>wemakedevs</category>
+      <enclosure url="https://raw.githubusercontent.com/WeMakeDevs/blogs/main/images/wispr/cover.png?v=4649fcf14097424c13ad62fafaccaa59ff43c030" type="image/png" length="0" />
+    </item>
+    <item>
+      <title>How to Build an Agent That Reasons Over a Graph</title>
+      <link>https://www.wemakedevs.org/blogs/how-to-build-an-agent-that-reasons-over-a-graph</link>
+      <guid isPermaLink="true">https://www.wemakedevs.org/blogs/how-to-build-an-agent-that-reasons-over-a-graph</guid>
+      <pubDate>Thu, 15 Oct 2026 00:00:00 GMT</pubDate>
+      <description>The usual way to give an agent context is a retrieval step. Embed the question, pull back the closest few records or chunks, hand them to the model as a block of text. That works for as long as the answer lives inside one of those records.</description>
+      <dc:creator>Aayush Sharma</dc:creator>
+      <category>hackathon</category>
+      <category>falkordb</category>
+      <category>wemakedevs</category>
+      <enclosure url="https://raw.githubusercontent.com/WeMakeDevs/blogs/main/images/how-to-build-an-agent-that-reasons-over-a-graph/cover.png?v=ee9d92aa4dab2e17ef901e89c973d5d51345dc64" type="image/png" length="0" />
+    </item>
+    <item>
+      <title>First Commit Hackathon Recap and What&apos;s Next</title>
+      <link>https://www.wemakedevs.org/blogs/first-commit-hackathon-recap-and-whats-next</link>
+      <guid isPermaLink="true">https://www.wemakedevs.org/blogs/first-commit-hackathon-recap-and-whats-next</guid>
+      <pubDate>Wed, 07 Oct 2026 00:00:00 GMT</pubDate>
+      <description>What students across India built, the projects that won, and how you can join the next stop of the tour powered by AWS Builder Center.</description>
+      <dc:creator>Kunal Kushwaha</dc:creator>
+      <category>hackathon</category>
+      <category>aws</category>
+      <category>wemakedevs</category>
+      <enclosure url="https://raw.githubusercontent.com/WeMakeDevs/blogs/main/images/first-commit-hackathon-recap-and-whats-next/cover.png?v=5bc8cedd0594aa4742d929eb27046572574f282e" type="image/png" length="0" />
+    </item>
+    <item>
+      <title>Bharat Builds Tour: What is Happening in Delhi on 10 October</title>
+      <link>https://www.wemakedevs.org/blogs/what-is-happening-in-delhi-on-10-october</link>
+      <guid isPermaLink="true">https://www.wemakedevs.org/blogs/what-is-happening-in-delhi-on-10-october</guid>
+      <pubDate>Tue, 06 Oct 2026 00:00:00 GMT</pubDate>
+      <description>Twelve hours in one room on the Saturday of Environmental Hacks.</description>
+      <dc:creator>Aayush Sharma</dc:creator>
+      <category>hackathon</category>
+      <category>aws</category>
+      <category>wemakedevs</category>
+      <enclosure url="https://raw.githubusercontent.com/WeMakeDevs/blogs/main/images/what-is-happening-in-delhi-on-10-october/cover.png?v=201dc85d30b5e438c70f2459cc84512e310ff8f2" type="image/png" length="0" />
+    </item>
+    <item>
+      <title>Announcing Environmental Hacks</title>
+      <link>https://www.wemakedevs.org/blogs/announcing-environmental-hacks</link>
+      <guid isPermaLink="true">https://www.wemakedevs.org/blogs/announcing-environmental-hacks</guid>
+      <pubDate>Tue, 29 Sep 2026 00:00:00 GMT</pubDate>
+      <description>Stop two of the Bharat Builds Tour, and the one theme where you already have the field research.</description>
+      <dc:creator>Aayush Sharma</dc:creator>
+      <category>hackathon</category>
+      <category>wemakedevs</category>
+      <category>aws</category>
+      <enclosure url="https://raw.githubusercontent.com/WeMakeDevs/blogs/main/images/announcing-environmental-hacks/cover.png?v=5a7aaa81ad4a01d13031f2af3b5f084d89d712dc" type="image/png" length="0" />
+    </item>
+    <item>
+      <title>How to Build a Live-Data Project on the AWS Serverless Stack</title>
+      <link>https://www.wemakedevs.org/blogs/how-to-build-a-live-data-project-on-the-aws-serverless-stack</link>
+      <guid isPermaLink="true">https://www.wemakedevs.org/blogs/how-to-build-a-live-data-project-on-the-aws-serverless-stack</guid>
+      <pubDate>Fri, 18 Sep 2026 00:00:00 GMT</pubDate>
+      <description>The Ship It track at First Commit hackathon asks for something running on AWS with a URL a judge can open.</description>
+      <dc:creator>Aayush Sharma</dc:creator>
+      <category>hackathon</category>
+      <category>wemakedevs</category>
+      <category>aws</category>
+      <enclosure url="https://raw.githubusercontent.com/WeMakeDevs/blogs/main/images/how-to-build-a-live-data-project-on-the-aws-serverless-stack/cover.png?v=d161045a34026737c60afb30f7c80a265005344d" type="image/png" length="0" />
+    </item>
+    <item>
+      <title>How to Build a Real-Data AI Project on the AWS Open Source Stack</title>
+      <link>https://www.wemakedevs.org/blogs/how-to-build-a-real-data-ai-project-on-the-aws-open-source-stack</link>
+      <guid isPermaLink="true">https://www.wemakedevs.org/blogs/how-to-build-a-real-data-ai-project-on-the-aws-open-source-stack</guid>
+      <pubDate>Fri, 18 Sep 2026 00:00:00 GMT</pubDate>
+      <description>Everything in this tutorial is open source and runs on your own laptop. Five techniques from one real project, each of which transfers to whatever you build in First Commit hackathon.</description>
+      <dc:creator>Aayush Sharma</dc:creator>
+      <category>hackathon</category>
+      <category>wemakedevs</category>
+      <category>aws</category>
+      <enclosure url="https://raw.githubusercontent.com/WeMakeDevs/blogs/main/images/how-to-build-a-real-data-ai-project-on-the-aws-open-source-stack/cover.png?v=97dc468068c708d13792578716fb14eaa457e80b" type="image/png" length="0" />
+    </item>
+    <item>
+      <title>The Only Resource You Need for Bharat Builds</title>
+      <link>https://www.wemakedevs.org/blogs/the-only-resource-you-need-for-bharat-builds</link>
+      <guid isPermaLink="true">https://www.wemakedevs.org/blogs/the-only-resource-you-need-for-bharat-builds</guid>
+      <pubDate>Wed, 16 Sep 2026 00:00:00 GMT</pubDate>
+      <description>Hundreds of workshops, eight-hour sandboxes, $100 in hackathon credits and up to $579 in free training and certification, all behind one AWS Builder Center profile.</description>
+      <dc:creator>Aayush Sharma</dc:creator>
+      <category>hackathon</category>
+      <category>wemakedevs</category>
+      <category>aws</category>
+      <enclosure url="https://raw.githubusercontent.com/WeMakeDevs/blogs/main/images/the-only-resource-you-need-for-bharat-builds/cover.png?v=31340e31257cda9686a0bceef96e2a0ca633a799" type="image/png" length="0" />
+    </item>
+    <item>
+      <title>From First Idea to Working Demo: How to Plan a Cloud Project</title>
+      <link>https://www.wemakedevs.org/blogs/how-to-plan-a-cloud-project</link>
+      <guid isPermaLink="true">https://www.wemakedevs.org/blogs/how-to-plan-a-cloud-project</guid>
+      <pubDate>Tue, 15 Sep 2026 00:00:00 GMT</pubDate>
+      <description>Knowing what a cloud service does is a different skill from knowing which services your own project needs. Courses, documentation and tutorials cover the first one thoroughly, but very little covers the second, which is why a student who can confidently explain what Lambda and DynamoDB are will still stall when the task is to plan a project from scratch.</description>
+      <dc:creator>Aayush Sharma</dc:creator>
+      <category>hackathon</category>
+      <category>wemakedevs</category>
+      <category>aws</category>
+      <enclosure url="https://raw.githubusercontent.com/WeMakeDevs/blogs/main/images/how-to-plan-a-cloud-project/cover.png?v=180bf33d49189d649a6b89149f1841f686cc1d4e" type="image/png" length="0" />
+    </item>
+    <item>
+      <title>Stop Waiting to Feel Ready &amp; Start Building With Bharat Builds</title>
+      <link>https://www.wemakedevs.org/blogs/bharat-builds-cloud-and-ai</link>
+      <guid isPermaLink="true">https://www.wemakedevs.org/blogs/bharat-builds-cloud-and-ai</guid>
+      <pubDate>Mon, 31 Aug 2026 00:00:00 GMT</pubDate>
+      <description>If you are a student and have ever opened a dozen tabs trying to learn something new in cloud, AI or tech in general and closed all of them more confused than when you started, you already know the feeling.</description>
+      <dc:creator>Sachin Sharma</dc:creator>
+      <category>hackathon</category>
+      <category>aws</category>
+      <category>wemakedevs</category>
+      <enclosure url="https://raw.githubusercontent.com/WeMakeDevs/blogs/main/images/bharat-builds-cloud-and-ai/cover.png?v=a033374251826bc210979862c96e2ab9ddc56781" type="image/png" length="0" />
+    </item>
+    <item>
+      <title>Announcing the Bharat Builds Tour</title>
+      <link>https://www.wemakedevs.org/blogs/bharat-builds-tour</link>
+      <guid isPermaLink="true">https://www.wemakedevs.org/blogs/bharat-builds-tour</guid>
+      <pubDate>Mon, 31 Aug 2026 00:00:00 GMT</pubDate>
+      <description>A six-city hybrid hackathon tour running September to December 2026, with ₹1 crore in prizes and fast track hiring at Amazon for top performers. Learn cloud and AI by building with AWS experts, online from anywhere in India or in person in your city.</description>
+      <dc:creator>Kunal Kushwaha</dc:creator>
+      <category>hackathon</category>
+      <category>aws</category>
+      <category>wemakedevs</category>
+      <enclosure url="https://raw.githubusercontent.com/WeMakeDevs/blogs/main/images/bharat-builds-tour/cover.webp?v=cdbb451b960bbf0eadcdfedc469394a23eba22fa" type="image/png" length="0" />
+    </item>
+    <item>
+      <title>Getting Started Guide For The Agent Harness Hackathon</title>
+      <link>https://www.wemakedevs.org/blogs/agent-harness-hackathon-kick-off</link>
+      <guid isPermaLink="true">https://www.wemakedevs.org/blogs/agent-harness-hackathon-kick-off</guid>
+      <pubDate>Mon, 24 Aug 2026 00:00:00 GMT</pubDate>
+      <description>The Agent Harness Hackathon runs from August 24 to 30, with $10,000 in prizes, including an NVIDIA DGX Spark, a Mac Mini, Keychron Keyboard, Logitech MX Master 3, swag, and opportunities to interview with TrueFoundry.</description>
+      <dc:creator>Sachin Sharma</dc:creator>
+      <category>hackathon</category>
+      <category>technical</category>
+      <enclosure url="https://raw.githubusercontent.com/WeMakeDevs/blogs/main/images/agent-harness-hackathon-kick-off/cover.png?v=d77032c96b3b07135e1d3678b9ffd99ca4071edf" type="image/png" length="0" />
+    </item>
+    <item>
+      <title>The Hangover Part AI: A Week of Building AI That Doesn&apos;t Forget</title>
+      <link>https://www.wemakedevs.org/blogs/hangover-wrap-up-blog</link>
+      <guid isPermaLink="true">https://www.wemakedevs.org/blogs/hangover-wrap-up-blog</guid>
+      <pubDate>Sat, 22 Aug 2026 00:00:00 GMT</pubDate>
+      <description>A look back at The Hangover Part AI hackathon, where 8,500+ developers explored how AI systems can build, retrieve, and manage persistent memory. From winning projects to standout open-source contributions, this recap highlights what developers built with Cognee.</description>
+      <dc:creator>Sachin Sharma</dc:creator>
+      <category>hackathon</category>
+      <category>wemakedevs</category>
+      <enclosure url="https://raw.githubusercontent.com/WeMakeDevs/blogs/main/images/hangover-wrap-up-blog/cover.png?v=86d87a6d66b824d8d813e8bde451b3c9ce5c557d" type="image/png" length="0" />
+    </item>
+    <item>
+      <title>August with WeMakeDevs: 7 Events, 3 Cities, and You</title>
+      <link>https://www.wemakedevs.org/blogs/august-2026-with-wemakedevs</link>
+      <guid isPermaLink="true">https://www.wemakedevs.org/blogs/august-2026-with-wemakedevs</guid>
+      <pubDate>Wed, 19 Aug 2026 00:00:00 GMT</pubDate>
+      <description>Seven WeMakeDevs events in August 2026: hackathons with $15,000+ in prizes, a PR-roasting CTF, and AI meetups in San Francisco, Boston, Bengaluru and online.</description>
+      <dc:creator>Sachin Sharma</dc:creator>
+      <category>monthly</category>
+      <enclosure url="https://raw.githubusercontent.com/WeMakeDevs/blogs/main/images/august-2026-with-wemakedevs/cover.png?v=5ba0838385bb48e9b24217e204ed94d19f40015a" type="image/png" length="0" />
+    </item>
+    <item>
+      <title>Getting Started Guide For The Bright Data Hackathon</title>
+      <link>https://www.wemakedevs.org/blogs/scrape-verse-kick-off</link>
+      <guid isPermaLink="true">https://www.wemakedevs.org/blogs/scrape-verse-kick-off</guid>
+      <pubDate>Mon, 17 Aug 2026 00:00:00 GMT</pubDate>
+      <description>The Scrape-Verse Hackathon runs until August 23rd with $15,000 in prizes. Here&apos;s how to build a self-healing scraper with Bright Data&apos;s Scraper Studio, plus project ideas to steal.</description>
+      <dc:creator>Sachin Sharma</dc:creator>
+      <category>hackathon</category>
+      <category>technical</category>
+      <enclosure url="https://raw.githubusercontent.com/WeMakeDevs/blogs/main/images/scrape-verse-kick-off/cover.png?v=8ae451b3805d55545b9c3b3c43ec24fce7d36781" type="image/png" length="0" />
+    </item>
+    <item>
+      <title>Fix Your AI Data Pipeline: $10,000 Challenge</title>
+      <link>https://www.wemakedevs.org/blogs/fix-your-ai-data-pipeline</link>
+      <guid isPermaLink="true">https://www.wemakedevs.org/blogs/fix-your-ai-data-pipeline</guid>
+      <pubDate>Sat, 16 May 2026 00:00:00 GMT</pubDate>
+      <description>Learn how to fix your AI pipelines and earn $10,000 while doing it!</description>
+      <dc:creator>Kunal Kushwaha</dc:creator>
+      <category>hackathon</category>
+      <category>technical</category>
+      <enclosure url="https://raw.githubusercontent.com/WeMakeDevs/blogs/main/images/fix-your-ai-data-pipeline/cover.png?v=4d520dd4fdf488f9461d83f6a4e4580667d341c2" type="image/png" length="0" />
+    </item>
+    <item>
+      <title>Win $14,000 By Building, Learning and Getting Certified</title>
+      <link>https://www.wemakedevs.org/blogs/may-edition</link>
+      <guid isPermaLink="true">https://www.wemakedevs.org/blogs/may-edition</guid>
+      <pubDate>Sun, 10 May 2026 00:00:00 GMT</pubDate>
+      <description>Two WeMakeDevs events this May - a $10,000 AI agent hackathon with Coral and a $4,000 beginner-friendly workflow orchestration challenge with Kestra.</description>
+      <dc:creator>Kunal Kushwaha</dc:creator>
+      <category>hackathon</category>
+      <category>technical</category>
+      <enclosure url="https://raw.githubusercontent.com/WeMakeDevs/blogs/main/images/may-edition/cover.png?v=25d064111349f1b19aaac2d8407b3dcb439af98d" type="image/png" length="0" />
+    </item>
+    <item>
+      <title>One Hackathon, $7K in Prizes, $100 For Merged PR: 10 Days To Build</title>
+      <link>https://www.wemakedevs.org/blogs/back-to-metadata</link>
+      <guid isPermaLink="true">https://www.wemakedevs.org/blogs/back-to-metadata</guid>
+      <pubDate>Mon, 20 Apr 2026 00:00:00 GMT</pubDate>
+      <description>The Back to the Metadata Hackathon gives you 10 days to build anything on OpenMetadata, a $7,000 prize pool, and $100 for every merged pull request on the contribution track.</description>
+      <dc:creator>Kunal Kushwaha</dc:creator>
+      <category>hackathon</category>
+      <category>technical</category>
+      <enclosure url="https://raw.githubusercontent.com/WeMakeDevs/blogs/main/images/back-to-metadata/cover.png?v=ddaf0db3764f4a2cd5aeb3fb81a396f70540a634" type="image/png" length="0" />
+    </item>
+    <item>
+      <title>Hack All February: A Month of Building in Public</title>
+      <link>https://www.wemakedevs.org/blogs/hack-all-february</link>
+      <guid isPermaLink="true">https://www.wemakedevs.org/blogs/hack-all-february</guid>
+      <pubDate>Thu, 12 Mar 2026 00:00:00 GMT</pubDate>
+      <description>Four back-to-back hackathons, 20,000+ participants and $40,000+ in prizes. Here&apos;s everything the community built during Hack All February.</description>
+      <dc:creator>Kunal Kushwaha</dc:creator>
+      <category>hackathon</category>
+      <category>technical</category>
+      <enclosure url="https://raw.githubusercontent.com/WeMakeDevs/blogs/main/images/hack-all-february/cover.png?v=0b9de2a3312d31d832bb0cba4ea6929c9e24e0c7" type="image/png" length="0" />
+    </item>
+  </channel>
+</rss>

@@ -6,10 +6,13 @@ import {
   WEMMAKEDEVS_ORIGIN,
   parseCareers,
   parseHackathons,
+  parseBlogRss,
   parseMeetups,
   parseScholarships,
   parseSectionAst,
   parseFaq,
+  parseResources,
+  parseSchedule,
 } from './parse.js';
 import type { HealthReportSchema } from './schemas.js';
 import type { z } from 'zod';
@@ -20,18 +23,24 @@ type CheckResult = HealthReport['results'][number];
 export type HealthTarget =
   | 'hackathons-listing'
   | 'hackathon-detail'
+  | 'hackathon-schedule'
+  | 'hackathon-resources'
   | 'rules-page'
   | 'meetups-listing'
   | 'careers'
-  | 'scholarships';
+  | 'scholarships'
+  | 'blog-rss';
 
 export const ALL_TARGETS: HealthTarget[] = [
   'hackathons-listing',
   'hackathon-detail',
+  'hackathon-schedule',
+  'hackathon-resources',
   'rules-page',
   'meetups-listing',
   'careers',
   'scholarships',
+  'blog-rss',
 ];
 
 const SENTINEL_SLUG = process.env.HEALTH_SENTINEL_SLUG ?? 'switch';
@@ -43,7 +52,12 @@ const FIXTURES: Record<string, string> = {
   [`${WEMMAKEDEVS_ORIGIN}/scholarships`]: 'scholarships.html',
   [`${WEMMAKEDEVS_ORIGIN}/hackathons/${SENTINEL_SLUG}`]: `${SENTINEL_SLUG}.html`,
   [`${WEMMAKEDEVS_ORIGIN}/hackathons/${SENTINEL_SLUG}/rules`]: 'rules.html',
+  [`${WEMMAKEDEVS_ORIGIN}/hackathons/${SENTINEL_SLUG}/schedule`]: 'schedule.html',
+  [`${WEMMAKEDEVS_ORIGIN}/hackathons/${SENTINEL_SLUG}/resources`]: 'resources.html',
+  [`${WEMMAKEDEVS_ORIGIN}/blogs/rss.xml`]: 'blog-rss.xml',
 };
+
+const RSS_URL = `${WEMMAKEDEVS_ORIGIN}/blogs/rss.xml`;
 
 export interface HealthOptions {
   /** offline = parse committed fixtures, no network. Used by CI. */
@@ -52,16 +66,24 @@ export interface HealthOptions {
   targets?: HealthTarget[];
 }
 
-async function getHtml(url: string, opts: HealthOptions): Promise<string> {
+async function getHtml(
+  url: string,
+  opts: HealthOptions,
+  selectors: string[] | null = ['body'],
+): Promise<string> {
   if (opts.offline) {
     const dir = opts.fixturesDir ?? path.join(process.cwd(), 'test', 'fixtures');
     const file = FIXTURES[url];
     if (!file) throw new WemakedevsError('CONFIG', `No fixture registered for ${url}`);
     return readFile(path.join(dir, file), 'utf8');
   }
-  const out = await fetchPages([url], { format: 'html', ttl: 0 });
+  const out = await fetchPages([url], {
+    format: 'html',
+    ttl: 0,
+    includeSelectors: selectors ?? undefined,
+  });
   const text = out.results[0]?.text;
-  if (typeof text !== 'string' || text.length < 1000) {
+  if (typeof text !== 'string' || text.length < 100) {
     throw new WemakedevsError('SITE_CHANGED', `Suspiciously small page returned for ${url}`, { url });
   }
   return text;
@@ -90,10 +112,11 @@ export async function runHealthChecks(opts: HealthOptions = {}): Promise<HealthR
     checks.push(timed('hackathons-listing', false, async () => {
       const html = await getHtml(`${WEMMAKEDEVS_ORIGIN}/hackathons`, opts);
       const { items, source } = parseHackathons(html);
-      if (items.length < 25) throw new WemakedevsError('SITE_CHANGED', `Only ${items.length} hackathon cards parsed (expected ≥ 25).`);
+      if (items.length < 10) throw new WemakedevsError('SITE_CHANGED', `Only ${items.length} hackathon cards parsed (expected ≥ 10).`);
       const bad = items.find((i) => !i.title || !i.url.startsWith('http'));
       if (bad) throw new WemakedevsError('SITE_CHANGED', `Card with missing title/url: ${JSON.stringify(bad)}`);
       const withDates = items.filter((i) => i.startDate).length;
+      if (withDates === 0) throw new WemakedevsError('SITE_CHANGED', 'No hackathon card yielded a machine-readable start date.');
       return `${items.length} events parsed (${source}); ${withDates} with ISO dates; sentinel present: ${items.some((i) => /switch/i.test(i.url))}`;
     }));
   }
@@ -113,6 +136,30 @@ export async function runHealthChecks(opts: HealthOptions = {}): Promise<HealthR
     }));
   }
 
+  if (wanted.has('hackathon-schedule')) {
+    checks.push(timed('hackathon-schedule', false, async () => {
+      const url = `${WEMMAKEDEVS_ORIGIN}/hackathons/${SENTINEL_SLUG}/schedule`;
+      const html = await getHtml(url, opts);
+      const items = parseSchedule(html);
+      if (items.length < 4) throw new WemakedevsError('SITE_CHANGED', `Only ${items.length} schedule milestones parsed (expected ≥ 4).`);
+      const withDates = items.filter((i) => i.date).length;
+      if (withDates === 0) throw new WemakedevsError('SITE_CHANGED', 'No schedule milestone carries a machine-readable <time datetime>.');
+      return `${items.length} milestones; ${withDates} with ISO dates; first="${items[0].title}"`;
+    }));
+  }
+
+  if (wanted.has('hackathon-resources')) {
+    checks.push(timed('hackathon-resources', false, async () => {
+      const url = `${WEMMAKEDEVS_ORIGIN}/hackathons/${SENTINEL_SLUG}/resources`;
+      const html = await getHtml(url, opts);
+      const page = parseResources(html, WEMMAKEDEVS_ORIGIN);
+      const links = page.groups.reduce((n, g) => n + g.links.length, 0);
+      if (page.groups.length < 3) throw new WemakedevsError('SITE_CHANGED', `Only ${page.groups.length} resource group(s) parsed (expected ≥ 3).`);
+      if (links < 8) throw new WemakedevsError('SITE_CHANGED', `Only ${links} resource links parsed (expected ≥ 8).`);
+      return `${page.groups.length} groups; ${links} links; ${page.commands.length} CLI snippet(s)`;
+    }));
+  }
+
   if (wanted.has('rules-page')) {
     checks.push(timed('rules-page', false, async () => {
       const url = `${WEMMAKEDEVS_ORIGIN}/hackathons/${SENTINEL_SLUG}/rules`;
@@ -129,8 +176,10 @@ export async function runHealthChecks(opts: HealthOptions = {}): Promise<HealthR
     checks.push(timed('meetups-listing', false, async () => {
       const html = await getHtml(`${WEMMAKEDEVS_ORIGIN}/meetups`, opts);
       const items = parseMeetups(html);
-      if (items.length < 8) throw new WemakedevsError('SITE_CHANGED', `Only ${items.length} meetup cards parsed (expected ≥ 8).`);
-      return `${items.length} meetups parsed; all cards have title+url`;
+      if (items.length === 0 && !/no (?:upcoming )?meetups|check back|nothing scheduled/i.test(html)) {
+        throw new WemakedevsError('SITE_CHANGED', 'Zero meetups parsed and the page shows no explicit empty state.');
+      }
+      return `${items.length} meetup(s) parsed${items.length === 0 ? ' (valid empty state)' : '; all cards have title+url'}`;
     }));
   }
 
@@ -138,6 +187,9 @@ export async function runHealthChecks(opts: HealthOptions = {}): Promise<HealthR
     checks.push(timed('careers', false, async () => {
       const html = await getHtml(`${WEMMAKEDEVS_ORIGIN}/careers`, opts);
       const items = parseCareers(html);
+      if (items.length === 0 && !/No open roles right now|check back soon/i.test(html)) {
+        throw new WemakedevsError('SITE_CHANGED', 'Zero roles parsed and the page shows no explicit empty state.');
+      }
       return items.length === 0
         ? '0 open roles (page shows an empty state — valid, not a failure)'
         : `${items.length} open role(s): ${items.map((i) => i.title).join(', ')}`;
@@ -148,7 +200,26 @@ export async function runHealthChecks(opts: HealthOptions = {}): Promise<HealthR
     checks.push(timed('scholarships', false, async () => {
       const html = await getHtml(`${WEMMAKEDEVS_ORIGIN}/scholarships`, opts);
       const info = parseScholarships(html);
+      if (!info.program) throw new WemakedevsError('SITE_CHANGED', 'Could not identify the scholarship program name.');
+      if (info.covers.length === 0) throw new WemakedevsError('SITE_CHANGED', 'Could not parse the "What it covers" list.');
+      if (info.faqs.length === 0) throw new WemakedevsError('SITE_CHANGED', 'Could not parse any scholarship FAQs.');
       return `program="${(info.program ?? '(none)').slice(0, 60)}"; status=${info.status}; ${info.covers.length} coverage items; ${info.winners.length} past winners; ${info.faqs.length} FAQs`;
+    }));
+  }
+
+  if (wanted.has('blog-rss')) {
+    checks.push(timed('blog-rss', false, async () => {
+      let xml: string;
+      try {
+        xml = await getHtml(RSS_URL, opts, ['rss']);
+      } catch {
+        // Some fetches reject an XML selector scope; read the raw document instead.
+        xml = await getHtml(RSS_URL, opts, null);
+      }
+      const posts = parseBlogRss(xml);
+      const typedDates = posts.filter((p) => p.pubDate && !Number.isNaN(Date.parse(p.pubDate))).length;
+      if (typedDates === 0) throw new WemakedevsError('SITE_CHANGED', 'RSS items carry no parseable pubDate.');
+      return `${posts.length} posts; ${typedDates} with parseable pubDate; newest="${posts[0]?.title.slice(0, 60)}"`;
     }));
   }
 

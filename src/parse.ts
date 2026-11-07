@@ -48,9 +48,16 @@ export function hackathonKind(formats: string[]): HackathonSummary['kind'] {
   return 'unknown';
 }
 
+function parseEndInclusive(iso: string): number {
+  const t = Date.parse(iso);
+  if (Number.isNaN(t)) return NaN;
+  // Date-only values mean "through the end of that day", not midnight.
+  return /^\d{4}-\d{2}-\d{2}$/.test(iso) ? t + 86_400_000 - 1 : t;
+}
+
 export function computeStatus(startDate: string | null, endDate: string | null, now: Date = new Date()): HackathonStatus {
   const start = startDate ? Date.parse(startDate) : NaN;
-  const end = endDate ? Date.parse(endDate) : NaN;
+  const end = endDate ? parseEndInclusive(endDate) : NaN;
   if (Number.isNaN(start) && Number.isNaN(end)) return 'unknown';
   const t = now.getTime();
   if (!Number.isNaN(start) && t < start) return 'upcoming';
@@ -80,35 +87,128 @@ function cardToSummary(card: FlightCard, origin: string, now: Date): HackathonSu
   };
 }
 
-/** DOM fallback: list cards when flight data is unavailable (scripts stripped). */
+const MONTH_INDEX: Record<string, number> = {
+  jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
+  jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11,
+};
+
+function monthIndex(name: string): number {
+  return MONTH_INDEX[name.slice(0, 3).toLowerCase()] ?? -1;
+}
+
+function isoUtc(year: number, month: number, day: number): string {
+  // Date.UTC normalizes overflow/underflow (day 0 = last day of previous month).
+  return new Date(Date.UTC(year, month, day)).toISOString().slice(0, 10);
+}
+
+/**
+ * Parse the display date on a server-rendered event card, e.g.
+ *   "Nov 25", "Nov 9–10", "Sep 30 – Oct 31", "December 15–21, 2025", "February 2026".
+ * The site prints a year only for events outside the current year, so a missing
+ * year is assumed to be the current year.
+ */
+export function parseDisplayDate(
+  input: string,
+  now: Date = new Date(),
+): { startDate: string | null; endDate: string | null } {
+  const text = cleanText(input).replace(/[\u2013\u2014\u2212]/g, '-');
+  if (!text) return { startDate: null, endDate: null };
+  const yearMatch = text.match(/\b(20\d{2})\b/);
+  const explicitYear = yearMatch ? Number(yearMatch[1]) : null;
+  const withoutYear = yearMatch ? text.replace(yearMatch[0], ' ') : text;
+  const monthRe =
+    /\b(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\b\.?\s*(\d{1,2})?/gi;
+  const matches = [...withoutYear.matchAll(monthRe)];
+  if (matches.length === 0) return { startDate: null, endDate: null };
+
+  const m1 = monthIndex(matches[0][1]);
+  if (m1 < 0) return { startDate: null, endDate: null };
+  const year = explicitYear ?? now.getUTCFullYear();
+
+  // Month-only range, e.g. "February 2026".
+  if (matches.length === 1 && matches[0][2] === undefined) {
+    return { startDate: isoUtc(year, m1, 1), endDate: isoUtc(year, m1 + 1, 0) };
+  }
+
+  const d1 = matches[0][2] ? Number(matches[0][2]) : 1;
+  let m2 = m1;
+  let d2 = d1;
+  if (matches.length >= 2 && matches[1][2] !== undefined) {
+    m2 = monthIndex(matches[1][1]);
+    d2 = Number(matches[1][2]);
+  } else {
+    // Same-month range: "Nov 9–10" → the bare second day follows the first match.
+    const after = withoutYear.slice((matches[0].index ?? 0) + matches[0][0].length);
+    const bare = after.match(/^\s*-\s*(\d{1,2})\b/);
+    if (bare) d2 = Number(bare[1]);
+  }
+  if (m2 < 0) return { startDate: null, endDate: null };
+
+  let y1 = year;
+  let y2 = year;
+  if (m2 < m1) {
+    if (explicitYear) {
+      // Year written at the end applies to the closing date: "Dec 29 – Jan 2, 2026".
+      y1 = explicitYear - 1;
+      y2 = explicitYear;
+    } else {
+      y2 = year + 1;
+    }
+  }
+  return { startDate: isoUtc(y1, m1, d1), endDate: isoUtc(y2, m2, d2) };
+}
+
+/** DOM fallback: read the server-rendered event cards (Fetch strips scripts). */
 function parseHackathonCardsDom(html: string, origin: string, now: Date): HackathonSummary[] {
   const $ = cheerio.load(html);
   const items: HackathonSummary[] = [];
   $('a[href]').each((_, a) => {
     const $a = $(a);
     const h3 = $a.find('h3').first();
-    const img = $a.find('img').first();
-    const title = cleanText(h3.text()) || cleanText(img.attr('alt'));
-    if (!title) return;
+    if (!h3.length) return; // event cards always carry an <h3>; skips nav/footer links
+    const chips = $a
+      .find('span.translate-y-\\[1px\\]')
+      .map((_, s) => cleanText($(s).text()))
+      .get()
+      .filter(Boolean);
+    const dateText = chips.find((c) => /\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\w*\b/i.test(c)) ?? null;
+    if (!dateText) return; // not an event card
+    const title = cleanText(h3.text());
     const url = absoluteUrl($a.attr('href'), origin);
-    if (!url) return;
-    // Only event-card links: must carry an image or an h3 heading.
-    if (!img.length && !h3.length) return;
-    const text = cleanText($a.text());
-    const kindMatch = text.match(/\b(Hybrid|Remote|Online|In person)\b/i);
-    const locMatch = text.match(/\b(Remote|Online|Hybrid)\b/) || null;
+    if (!title || !url) return;
+    const location = chips.find((c) => c !== dateText) ?? null;
+    const loc = (location ?? '').toLowerCase();
+    const kind: HackathonSummary['kind'] =
+      loc.includes('remote') || loc.includes('online')
+        ? 'online'
+        : loc.includes('hybrid')
+          ? 'hybrid'
+          : location
+            ? 'in-person'
+            : 'unknown';
+    const formats =
+      kind === 'online' ? ['online'] : kind === 'hybrid' ? ['online', 'offline'] : kind === 'in-person' ? ['offline'] : [];
+    const prize = cleanText($a.find('p').first().text()) || null;
+    const { startDate, endDate } = parseDisplayDate(dateText, now);
+    const host = (() => {
+      try {
+        return new URL(url).hostname.toLowerCase();
+      } catch {
+        return '';
+      }
+    })();
     items.push({
       title,
       url,
-      location: locMatch ? locMatch[0] : kindMatch ? kindMatch[0] : null,
-      formats: [],
-      kind: 'unknown',
-      prize: null,
-      dateText: null,
-      startDate: null,
-      endDate: null,
-      status: 'unknown',
-      external: !url.startsWith(origin),
+      location,
+      formats,
+      kind,
+      prize,
+      dateText,
+      startDate,
+      endDate,
+      status: computeStatus(startDate, endDate, now),
+      external: !host.endsWith('wemakedevs.org'),
     });
   });
   return items;
@@ -170,14 +270,8 @@ export function parseMeetups(html: string, origin: string = WEMMAKEDEVS_ORIGIN):
     items.push({ title, url, location, dateText, description });
   });
   const seen = new Set<string>();
-  const out = items.filter((x) => (seen.has(x.url + x.title) ? false : (seen.add(x.url + x.title), true)));
-  if (out.length === 0) {
-    throw new WemakedevsError('SITE_CHANGED', 'No meetup cards found on the meetups page.', {
-      url: origin + '/meetups',
-      hint: 'The page structure likely changed. Run `npm run health` and report the failure output.',
-    });
-  }
-  return out;
+  return items.filter((x) => (seen.has(x.url + x.title) ? false : (seen.add(x.url + x.title), true)));
+  // Zero meetups listed is a valid state (nothing scheduled right now), not a breakage.
 }
 
 // ---------- Careers ----------
@@ -484,4 +578,192 @@ export function extractScholarshipFaqs(html: string, $: CheerioAPI): Array<{ que
     }
     return { question, answer: null };
   });
+}
+
+// ---------- Blog (RSS feed) ----------
+
+export interface BlogPostSummary {
+  title: string;
+  url: string;
+  pubDate: string | null;
+  description: string | null;
+  author: string | null;
+  categories: string[];
+}
+
+function decodeEntities(s: string): string {
+  if (!s || !s.includes('&')) return s;
+  return cheerio.load(`<div>${s}</div>`)('div').first().text();
+}
+
+function rssTag(block: string, tag: string): string | null {
+  const m = block.match(new RegExp(`<${tag}\\b[^>]*>([\\s\\S]*?)<\\/${tag}>`, 'i'));
+  return m ? cleanText(decodeEntities(m[1])) : null;
+}
+
+function rssLink(block: string): string | null {
+  // Fetch serializes RSS <link> as an HTML void element: "<link/>https://…".
+  const selfClosing = block.match(/<link\b[^>]*\/>\s*(https?:\/\/[^\s<]+)/i);
+  if (selfClosing) return selfClosing[1];
+  const paired = rssTag(block, 'link');
+  if (paired && /^https?:\/\//i.test(paired)) return paired;
+  const guid = rssTag(block, 'guid');
+  if (guid && /^https?:\/\//i.test(guid)) return guid;
+  return null;
+}
+
+export function parseBlogRss(xml: string): BlogPostSummary[] {
+  if (typeof xml !== 'string' || !(/<rss[\s>]/.test(xml) || xml.includes('<channel'))) {
+    throw new WemakedevsError('SITE_CHANGED', 'The blog RSS feed did not return an <rss> document.', {
+      url: 'https://www.wemakedevs.org/blogs/rss.xml',
+    });
+  }
+  const blocks = xml.match(/<item\b[^>]*>[\s\S]*?<\/item>/gi) ?? [];
+  const items: BlogPostSummary[] = [];
+  for (const block of blocks) {
+    const title = rssTag(block, 'title');
+    const url = rssLink(block);
+    if (!title || !url) continue;
+    const pubDate = rssTag(block, 'pubdate') ?? rssTag(block, 'pubDate');
+    const description = rssTag(block, 'description');
+    const author = rssTag(block, 'dc:creator');
+    const categories = [...block.matchAll(/<category\b[^>]*>([\s\S]*?)<\/category>/gi)]
+      .map((m) => cleanText(decodeEntities(m[1])))
+      .filter(Boolean);
+    items.push({ title, url, pubDate, description, author, categories });
+  }
+  if (items.length === 0) {
+    throw new WemakedevsError('SITE_CHANGED', 'The blog RSS feed parsed but contained no <item> entries.', {
+      url: 'https://www.wemakedevs.org/blogs/rss.xml',
+    });
+  }
+  return items;
+}
+
+export interface BlogPost extends BlogPostSummary {
+  paragraphs: string[];
+  links: Array<{ text: string; href: string }>;
+}
+
+export function parseBlogPost(html: string, url: string): BlogPost {
+  const $ = cheerio.load(html);
+  $('script, style, noscript, svg, nav, footer, header').remove();
+  const main = $('main').first();
+  const root = main.length ? main : $('body');
+  const title = cleanText(root.find('h1').first().text()) || 'Untitled';
+  const publishedAt = root.find('time[datetime]').attr('datetime') ?? null;
+  // Article body is the cleanest scope; fall back to <main> for older layouts.
+  const article = root.find('article').first();
+  const body = article.length ? article : root;
+  const paragraphs = body.find('p').map((_, p) => cleanText($(p).text())).get()
+    .filter((t) => t.length > 40).slice(0, 150);
+  const links: Array<{ text: string; href: string }> = [];
+  body.find('a[href]').each((_, a) => {
+    if (links.length >= 100) return;
+    const t = cleanText($(a).text());
+    const href = absoluteUrl($(a).attr('href'), url);
+    if (t && href) links.push({ text: t.slice(0, 120), href });
+  });
+  return {
+    title,
+    url,
+    pubDate: publishedAt,
+    description: null,
+    author: null,
+    categories: [],
+    paragraphs,
+    links,
+  };
+}
+
+// ---------- Hackathon schedule page ----------
+
+export interface ScheduleMilestone {
+  whenText: string;
+  date: string | null;
+  title: string;
+  detail: string | null;
+  state: 'explicit-date' | 'marker';
+}
+
+export function parseSchedule(html: string): ScheduleMilestone[] {
+  const $ = cheerio.load(html);
+  const items: ScheduleMilestone[] = [];
+  // The schedule page also renders a demo chat transcript as <ol>/<li>. Timeline
+  // items are the ones whose first <p> is the mono date/marker column.
+  $('ol > li').each((_, li) => {
+    const $li = $(li);
+    const ps = $li.children('p');
+    if (ps.length < 2) return;
+    const first = ps.eq(0);
+    const time = first.find('time[datetime]').attr('datetime') ?? null;
+    const isTimeline = time !== null || first.hasClass('font-mono');
+    if (!isTimeline) return;
+    const whenText = cleanText(first.text());
+    const title = cleanText(ps.eq(1).text());
+    const detail = ps.length >= 3 ? cleanText(ps.eq(2).text()) || null : null;
+    if (!title || !whenText) return;
+    items.push({ whenText, date: time, title, detail, state: time ? 'explicit-date' : 'marker' });
+  });
+  if (items.length === 0) {
+    throw new WemakedevsError('SITE_CHANGED', 'No schedule milestones found on the schedule page.', {
+      hint: 'The <ol> layout likely changed. Run `npm run health`.',
+    });
+  }
+  return items;
+}
+
+// ---------- Hackathon resources page ----------
+
+export interface ResourceLink {
+  group: string;
+  label: string;
+  url: string;
+  note: string | null;
+}
+
+export interface ResourcesPage {
+  title: string | null;
+  groups: Array<{ name: string; links: Array<{ label: string; url: string; note: string | null }> }>;
+  commands: string[];
+}
+
+export function parseResources(html: string, origin: string = WEMMAKEDEVS_ORIGIN): ResourcesPage {
+  const $ = cheerio.load(html);
+  $('script, style, noscript, svg').remove();
+  const root = $('main').first().length ? $('main').first() : $('body');
+  const title = cleanText(root.find('h1').first().text()) || cleanText($('title').text()) || null;
+
+  const groups: ResourcesPage['groups'] = [];
+  // Group headings are h3.font-mono followed by a <ul> of links.
+  root.find('h3').each((_, h3) => {
+    const name = cleanText($(h3).text());
+    if (!name) return;
+    const ul = $(h3).nextAll('ul').first();
+    if (!ul.length) return;
+    const links: Array<{ label: string; url: string; note: string | null }> = [];
+    ul.find('li').each((_, li) => {
+      const a = $(li).find('a[href]').first();
+      const href = absoluteUrl(a.attr('href'), origin);
+      const label = cleanText(a.text());
+      if (!href || !label) return;
+      const note = cleanText($(li).find('p').first().text()) || null;
+      links.push({ label, url: href, note });
+    });
+    if (links.length) groups.push({ name, links });
+  });
+
+  // CLI one-liners (e.g. `claude mcp add switch-docs ...`) live in <pre>/<code>.
+  const commands: string[] = [];
+  root.find('pre, code').each((_, el) => {
+    const t = cleanText($(el).text());
+    if (/(mcp add|npx|npm|curl|claude)\b/i.test(t) && t.length < 300) commands.push(t);
+  });
+
+  if (groups.length === 0) {
+    throw new WemakedevsError('SITE_CHANGED', 'No resource groups with links found on the resources page.', {
+      hint: 'The page structure likely changed. Run `npm run health`.',
+    });
+  }
+  return { title, groups, commands: [...new Set(commands)].slice(0, 20) };
 }

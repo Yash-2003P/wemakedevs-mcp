@@ -142,3 +142,95 @@ export const HealthReportSchema = z.object({
   checkedAt: z.string(),
   results: z.array(HealthCheckResultSchema),
 });
+
+export const BlogPostSummarySchema = z.object({
+  title: z.string(),
+  url: z.string().url(),
+  pubDate: z.string().nullable(),
+  description: z.string().nullable(),
+  author: z.string().nullable(),
+  categories: z.array(z.string()),
+});
+
+export const BlogListSchema = z.object({
+  count: z.number().int(),
+  items: z.array(BlogPostSummarySchema),
+  source: z.literal('rss'),
+  asOf: z.string(),
+});
+
+export const BlogPostSchema = BlogPostSummarySchema.extend({
+  paragraphs: z.array(z.string()),
+  links: z.array(z.object({ text: z.string(), href: z.string().url() })),
+});
+
+export const ScheduleMilestoneSchema = z.object({
+  whenText: z.string(),
+  date: z.string().nullable(),
+  title: z.string(),
+  detail: z.string().nullable(),
+  state: z.enum(['explicit-date', 'marker']),
+});
+
+export const ScheduleSchema = z.object({
+  url: z.string().url(),
+  items: z.array(ScheduleMilestoneSchema),
+});
+
+export const ResourcesSchema = z.object({
+  url: z.string().url(),
+  title: z.string().nullable(),
+  groups: z.array(
+    z.object({
+      name: z.string(),
+      links: z.array(
+        z.object({
+          label: z.string(),
+          url: z.string().url(),
+          note: z.string().nullable(),
+        }),
+      ),
+    }),
+  ),
+  commands: z.array(z.string()),
+});
+
+export const UpdateItemSchema = z.object({
+  kind: z.enum(['blog', 'hackathon-start', 'hackathon-end']),
+  title: z.string(),
+  date: z.string(),
+  url: z.string().url(),
+  summary: z.string().nullable(),
+});
+
+export const UpdatesSchema = z.object({
+  withinDays: z.number().int(),
+  asOf: z.string(),
+  items: z.array(UpdateItemSchema),
+  note: z.string().nullable(),
+});
+
+export const HackathonChangesSchema = z.object({
+  asOf: z.string(),
+  baselineCapturedAt: z.string().nullable(),
+  baselineCreated: z.boolean(),
+  baselineUpdated: z.boolean(),
+  compared: z.number().int(),
+  added: z.array(z.object({ title: z.string(), url: z.string().url() })),
+  removed: z.array(z.object({ title: z.string(), url: z.string().url() })),
+  changed: z.array(
+    z.object({
+      title: z.string(),
+      url: z.string().url(),
+      fields: z.array(
+        z.object({
+          field: z.string(),
+          before: z.string().nullable(),
+          after: z.string().nullable(),
+        }),
+      ),
+    }),
+  ),
+  unchanged: z.number().int(),
+  note: z.string().nullable(),
+});

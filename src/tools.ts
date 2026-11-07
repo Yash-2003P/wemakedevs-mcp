@@ -5,18 +5,30 @@ import { fetchPages, runAgent } from './tinyfish.js';
 import {
   WEMMAKEDEVS_ORIGIN,
   extractHackathonMeta,
+  parseBlogPost,
+  parseBlogRss,
   parseCareers,
   parseFaq,
   parseHackathons,
   parseMeetups,
+  parseResources,
+  parseSchedule,
   parseScholarships,
   parseSectionAst,
+  type BlogPostSummary,
 } from './parse.js';
 import { resolveHackathonUrl, originOf } from './util.js';
+import { diffHackathons, loadSnapshot, saveSnapshot, snapshotFrom } from './diff.js';
 import { runHealthChecks, ALL_TARGETS, type HealthTarget } from './health.js';
 import {
+  BlogListSchema,
+  BlogPostSchema,
   CareerListSchema,
   DeadlinesSchema,
+  HackathonChangesSchema,
+  ResourcesSchema,
+  ScheduleSchema,
+  UpdatesSchema,
   HackathonDetailSchema,
   HackathonListSchema,
   MeetupListSchema,
@@ -58,16 +70,71 @@ const wrap =
     }
   };
 
-async function fetchHtml(url: string): Promise<string> {
-  const out = await fetchPages([url], { format: 'html', ttl: 0 });
+const RSS_URL = `${WEMMAKEDEVS_ORIGIN}/blogs/rss.xml`;
+
+interface FetchHtmlOptions {
+  /** CSS selectors to fetch verbatim (default ['body']). Pass null for the raw document. */
+  selectors?: string[] | null;
+  minChars?: number;
+}
+
+async function fetchHtml(url: string, opts: FetchHtmlOptions = {}): Promise<string> {
+  const { selectors = ['body'], minChars = 100 } = opts;
+  const out = await fetchPages([url], {
+    format: 'html',
+    ttl: 0,
+    includeSelectors: selectors ?? undefined,
+  });
   const text = out.results[0]?.text;
-  if (typeof text !== 'string' || text.length < 500) {
+  if (typeof text !== 'string' || text.length < minChars) {
     throw new WemakedevsError('SITE_CHANGED', `Page returned by TinyFish is suspiciously small (${typeof text === 'string' ? text.length : 'non-string'} chars).`, { url });
   }
   return text;
 }
 
+/** Fetch the blog RSS raw (XML, not HTML — selector scoping mangles <link> tags). */
+async function fetchRss(): Promise<string> {
+  return fetchHtml(RSS_URL, { selectors: null, minChars: 200 });
+}
+
+const ALLOWED_BLOG_HOSTS = new Set(['www.wemakedevs.org', 'wemakedevs.org', 'archive.wemakedevs.org']);
+
+function resolveBlogUrl(input: string): string {
+  const t = (input ?? '').trim();
+  let u: URL;
+  try {
+    u = /^https?:\/\//i.test(t) ? new URL(t) : new URL(WEMMAKEDEVS_ORIGIN + (t.startsWith('/') ? t : `/blogs/${t.replace(/^\/+/, '')}`));
+  } catch {
+    throw new WemakedevsError('VALIDATION_FAILED', `Malformed blog URL or slug: ${t}`);
+  }
+  if (!ALLOWED_BLOG_HOSTS.has(u.hostname.toLowerCase())) {
+    throw new WemakedevsError('VALIDATION_FAILED', `Blog posts live on wemakedevs.org; refusing to fetch ${u.host}.`);
+  }
+  if (!u.pathname.startsWith('/blogs')) {
+    throw new WemakedevsError('VALIDATION_FAILED', `Not a blog path: ${u.pathname}`, { hint: 'Blog URLs look like https://www.wemakedevs.org/blogs/<slug>.' });
+  }
+  return u.toString();
+}
+
 const asOf = () => new Date().toISOString();
+
+function filterBlogPosts(
+  items: BlogPostSummary[],
+  opts: { tag?: string; search?: string },
+): BlogPostSummary[] {
+  let out = items;
+  if (opts.tag) {
+    const tag = opts.tag.toLowerCase();
+    out = out.filter((i) => i.categories.some((c) => c.toLowerCase() === tag));
+  }
+  if (opts.search) {
+    const q = opts.search.toLowerCase();
+    out = out.filter((i) =>
+      [i.title, i.description, i.author, ...i.categories].some((v) => v?.toLowerCase().includes(q)),
+    );
+  }
+  return out;
+}
 
 export function registerTools(server: McpServer): void {
   // ---------- list_hackathons ----------
@@ -105,7 +172,7 @@ export function registerTools(server: McpServer): void {
       });
       const slice = out.slice(0, limit);
       const notes: string[] = [];
-      if (source === 'dom') notes.push('Parsed via DOM fallback (embedded JSON missing): dates and statuses are unavailable.');
+      if (source === 'dom') notes.push('Parsed from the rendered event cards (site scripts are not exposed by Fetch); display dates without a year are assumed to be the current year.');
       if (status !== 'all' && slice.some((i) => i.status === 'unknown')) {
         notes.push('Includes events with unparseable dates (status="unknown").');
       }
@@ -217,13 +284,12 @@ export function registerTools(server: McpServer): void {
         type: 'object',
         properties: {
           state: { type: 'string', enum: ['open', 'closed', 'upcoming', 'unknown'] },
-          opensAt: { type: 'string', description: 'Verbatim opening date text, or "" if not shown' },
-          closesAt: { type: 'string', description: 'Verbatim closing date text, or "" if not shown' },
-          registeredCount: { type: 'integer', description: 'Registered count if displayed, else -1' },
+          opensAt: { type: 'string' },
+          closesAt: { type: 'string' },
+          registeredCount: { type: 'integer' },
           notes: { type: 'string' },
         },
         required: ['state', 'opensAt', 'closesAt', 'registeredCount', 'notes'],
-        additionalProperties: false,
       };
       const raw = await runAgent({ url, goal, outputSchema });
       const parsed = z
@@ -345,26 +411,281 @@ export function registerTools(server: McpServer): void {
     },
     wrap(async ({ within_days }) => {
       const html = await fetchHtml(`${WEMMAKEDEVS_ORIGIN}/hackathons`);
-      const { items } = parseHackathons(html);
+      const { items, source } = parseHackathons(html);
       const now = Date.now();
       const end = now + within_days * 86_400_000;
-      const inWindow = (iso: string | null) => {
+      const inWindow = (iso: string | null, inclusiveEnd = false) => {
         if (!iso) return false;
-        const t = Date.parse(iso);
-        return !Number.isNaN(t) && t >= now && t <= end;
+        let t = Date.parse(iso);
+        if (Number.isNaN(t)) return false;
+        if (inclusiveEnd && /^\d{4}-\d{2}-\d{2}$/.test(iso)) t += 86_400_000 - 1;
+        return t >= now && t <= end;
       };
       const deadlines = items.flatMap((i) => {
         const out: Array<{ kind: 'hackathon-start' | 'hackathon-end'; title: string; date: string; url: string }> = [];
         if (inWindow(i.startDate)) out.push({ kind: 'hackathon-start', title: i.title, date: i.startDate!, url: i.url });
-        if (inWindow(i.endDate)) out.push({ kind: 'hackathon-end', title: i.title, date: i.endDate!, url: i.url });
+        if (inWindow(i.endDate, true)) out.push({ kind: 'hackathon-end', title: i.title, date: i.endDate!, url: i.url });
         return out;
       }).sort((a, b) => a.date.localeCompare(b.date));
       return {
         withinDays: within_days,
         asOf: asOf(),
         items: deadlines,
-        note: 'Meetups and scholarships excluded — the site publishes display-text dates only for those.',
+        note:
+          'Meetups and scholarships excluded — the site publishes display-text dates only for those.' +
+          (source === 'dom' ? ' Hackathon dates were read from rendered cards; yearless dates are assumed to be the current year.' : ''),
       };
+    }),
+  );
+
+  // ---------- list_blog_posts ----------
+  server.registerTool(
+    'list_blog_posts',
+    {
+      title: 'List WeMakeDevs blog posts',
+      description:
+        'List posts from the live WeMakeDevs blog RSS feed (/blogs/rss.xml). Returns title, canonical URL, publication date, summary, author and tags. Filter by tag or free-text search. Use get_blog_post for the full article text.',
+      inputSchema: z.object({
+        limit: z.number().int().min(1).max(100).default(20),
+        tag: z.string().max(60).optional()
+          .describe('Only posts carrying this category/tag (case-insensitive), e.g. "hackathon".'),
+        search: z.string().max(120).optional()
+          .describe('Case-insensitive substring match on title, summary, author and tags.'),
+      }),
+      outputSchema: BlogListSchema,
+      annotations: { readOnlyHint: true, openWorldHint: true },
+    },
+    wrap(async ({ limit, tag, search }) => {
+      const xml = await fetchRss();
+      const items = filterBlogPosts(parseBlogRss(xml), { tag, search });
+      const slice = items.slice(0, limit);
+      return { count: slice.length, items: slice, source: 'rss' as const, asOf: asOf() };
+    }),
+  );
+
+  // ---------- search_blog ----------
+  server.registerTool(
+    'search_blog',
+    {
+      title: 'Search WeMakeDevs blog posts',
+      description:
+        'Full-text search across the live WeMakeDevs blog RSS feed (title, summary, author, tags). Returns matching posts newest first. Use get_blog_post to read one in full.',
+      inputSchema: z.object({
+        query: z.string().min(1).max(120)
+          .describe('Words to look for, case-insensitive, e.g. "switch workflow" or "AWS".'),
+        tag: z.string().max(60).optional()
+          .describe('Restrict to this category/tag (case-insensitive).'),
+        limit: z.number().int().min(1).max(50).default(20),
+      }),
+      outputSchema: BlogListSchema,
+      annotations: { readOnlyHint: true, openWorldHint: true },
+    },
+    wrap(async ({ query, tag, limit }) => {
+      const xml = await fetchRss();
+      const items = filterBlogPosts(parseBlogRss(xml), { tag, search: query });
+      const slice = items.slice(0, limit);
+      return { count: slice.length, items: slice, source: 'rss' as const, asOf: asOf() };
+    }),
+  );
+
+  // ---------- get_blog_post ----------
+  server.registerTool(
+    'get_blog_post',
+    {
+      title: 'Get a WeMakeDevs blog post',
+      description:
+        'Read one WeMakeDevs blog post: title, date, author, tags, article paragraphs and every outbound link (relative links resolved). Pass a slug ("wispr"), path ("/blogs/wispr") or full wemakedevs.org/blog URL. Metadata comes from the live RSS feed, body from the live article page (TinyFish Fetch).',
+      inputSchema: z.object({
+        post: z.string().min(1).max(300)
+          .describe('Slug ("wispr"), path ("/blogs/wispr") or full URL on a wemakedevs.org host.'),
+      }),
+      outputSchema: BlogPostSchema,
+      annotations: { readOnlyHint: true, openWorldHint: true },
+    },
+    wrap(async ({ post }) => {
+      const url = resolveBlogUrl(post);
+      const [xml, html] = await Promise.all([fetchRss(), fetchHtml(url)]);
+      const feedItem = parseBlogRss(xml).find(
+        (i) => i.url.replace(/\/+$/, '') === url.replace(/\/+$/, ''),
+      );
+      const page = parseBlogPost(html, url);
+      return {
+        ...page,
+        pubDate: feedItem?.pubDate ?? page.pubDate,
+        description: feedItem?.description ?? page.description,
+        author: feedItem?.author ?? page.author,
+        categories: feedItem?.categories ?? page.categories,
+      };
+    }),
+  );
+
+  // ---------- get_hackathon_schedule ----------
+  server.registerTool(
+    'get_hackathon_schedule',
+    {
+      title: 'Get a hackathon timeline',
+      description:
+        'Get the timeline of a WeMakeDevs hackathon from its schedule page: each milestone with the display text the site shows ("Nov 2, 3:30 PM UK time" or "Open now"), the machine-readable ISO date when the site provides one, title and detail. Pass a slug, path or full URL; "/schedule" is appended automatically.',
+      inputSchema: z.object({
+        hackathon: z.string().min(1).max(300)
+          .describe('Slug ("switch"), path ("/hackathons/switch") or full URL on a WeMakeDevs host.'),
+      }),
+      outputSchema: ScheduleSchema,
+      annotations: { readOnlyHint: true, openWorldHint: true },
+    },
+    wrap(async ({ hackathon }) => {
+      const base = resolveHackathonUrl(hackathon).replace(/\/+$/, '');
+      const url = base.endsWith('/schedule') ? base : `${base}/schedule`;
+      const html = await fetchHtml(url);
+      return { url, items: parseSchedule(html) };
+    }),
+  );
+
+  // ---------- get_hackathon_resources ----------
+  server.registerTool(
+    'get_hackathon_resources',
+    {
+      title: 'Get a hackathon resource hub',
+      description:
+        'Get the resources page of a WeMakeDevs hackathon as grouped link lists (Start here, Build your workflow, Go deeper, Contribute, Videos…) with the note under each link, plus any CLI one-liners shown. Pass a slug, path or full URL; "/resources" is appended automatically.',
+      inputSchema: z.object({
+        hackathon: z.string().min(1).max(300)
+          .describe('Slug ("switch"), path ("/hackathons/switch") or full URL on a WeMakeDevs host.'),
+      }),
+      outputSchema: ResourcesSchema,
+      annotations: { readOnlyHint: true, openWorldHint: true },
+    },
+    wrap(async ({ hackathon }) => {
+      const base = resolveHackathonUrl(hackathon).replace(/\/+$/, '');
+      const url = base.endsWith('/resources') ? base : `${base}/resources`;
+      const html = await fetchHtml(url);
+      const page = parseResources(html, originOf(url));
+      return { url, title: page.title, groups: page.groups, commands: page.commands };
+    }),
+  );
+
+  // ---------- latest_updates ----------
+  server.registerTool(
+    'latest_updates',
+    {
+      title: 'Latest WeMakeDevs updates',
+      description:
+        'One feed of what is new and what is coming: blog posts published in the last N days plus hackathon start and submission-close dates in the next N days. Merged, date-stamped, newest first. Useful for "what changed", "what is new", and "what is coming up".',
+      inputSchema: z.object({
+        within_days: z.number().int().min(1).max(365).default(30)
+          .describe('Look-back window for blog posts and look-ahead window for hackathon dates, in days.'),
+      }),
+      outputSchema: UpdatesSchema,
+      annotations: { readOnlyHint: true, openWorldHint: true },
+    },
+    wrap(async ({ within_days }) => {
+      const span = within_days * 86_400_000;
+      const now = Date.now();
+      const [xml, listingHtml] = await Promise.all([
+        fetchRss(),
+        fetchHtml(`${WEMMAKEDEVS_ORIGIN}/hackathons`),
+      ]);
+      const posts = parseBlogRss(xml);
+      const { items: hackathons } = parseHackathons(listingHtml);
+      const items: Array<{
+        kind: 'blog' | 'hackathon-start' | 'hackathon-end';
+        title: string;
+        date: string;
+        url: string;
+        summary: string | null;
+      }> = [];
+      for (const p of posts) {
+        if (!p.pubDate) continue;
+        const t = Date.parse(p.pubDate);
+        if (Number.isNaN(t) || t < now - span || t > now + span) continue;
+        items.push({
+          kind: 'blog',
+          title: p.title,
+          date: new Date(t).toISOString(),
+          url: p.url,
+          summary: p.description,
+        });
+      }
+      for (const h of hackathons) {
+        const milestones = [
+          ['hackathon-start', h.startDate, 'Hackathon starts'],
+          ['hackathon-end', h.endDate, 'Submissions close'],
+        ] as const;
+        for (const [kind, iso, summary] of milestones) {
+          if (!iso) continue;
+          let t = Date.parse(iso);
+          if (kind === 'hackathon-end' && /^\d{4}-\d{2}-\d{2}$/.test(iso)) t += 86_400_000 - 1;
+          if (Number.isNaN(t) || t < now || t > now + span) continue;
+          items.push({ kind, title: h.title, date: new Date(t).toISOString(), url: h.url, summary });
+        }
+      }
+      items.sort((a, b) => b.date.localeCompare(a.date));
+      return {
+        withinDays: within_days,
+        asOf: asOf(),
+        items,
+        note: 'Blog posts from the last N days plus hackathon start/end dates in the next N days; newest date first.',
+      };
+    }),
+  );
+
+  // ---------- get_hackathon_changes ----------
+  server.registerTool(
+    'get_hackathon_changes',
+    {
+      title: 'Diff WeMakeDevs hackathons since last check',
+      description:
+        'Compare the live hackathon listing against the previous observation saved on this machine: which events were added, removed, or changed (title, prize, dates, location, format). The first call creates a baseline; later calls report real diffs. Live values always come from TinyFish Fetch — only prior observations are stored locally. Optionally scope to one hackathon.',
+      inputSchema: z.object({
+        hackathon: z.string().min(1).max(300).optional()
+          .describe('Optional slug ("switch"), path or full URL to diff only that event.'),
+        update_baseline: z.boolean().default(true)
+          .describe('After diffing, save the current state as the new baseline (default). Set false to keep comparing against the same baseline.'),
+      }),
+      outputSchema: HackathonChangesSchema,
+      annotations: { readOnlyHint: true, openWorldHint: true },
+    },
+    wrap(async ({ hackathon, update_baseline }) => {
+      const { snapshot, warning } = await loadSnapshot();
+      const html = await fetchHtml(`${WEMMAKEDEVS_ORIGIN}/hackathons`);
+      const { items, source } = parseHackathons(html);
+
+      let filterUrl: string | undefined;
+      if (hackathon) {
+        filterUrl = resolveHackathonUrl(hackathon)
+          .replace(/\/(?:rules|schedule|resources)$/i, '')
+          .replace(/\/+$/, '');
+      }
+
+      const now = asOf();
+      const diff = diffHackathons(snapshot, items, { asOf: now, filterUrl });
+
+      if (filterUrl && diff.compared === 0 && !snapshot?.items[filterUrl]) {
+        throw new WemakedevsError(
+          'VALIDATION_FAILED',
+          `No hackathon matching ${filterUrl} appears in the current listing or the previous snapshot.`,
+          { hint: 'Use list_hackathons to see the current slugs.' },
+        );
+      }
+
+      let baselineUpdated = false;
+      let saveWarning: string | null = null;
+      if (update_baseline) {
+        saveWarning = await saveSnapshot(snapshotFrom(items, now));
+        baselineUpdated = saveWarning === null;
+      }
+
+      const notes = [
+        diff.note,
+        warning,
+        saveWarning,
+        update_baseline ? null : 'Baseline left unchanged (update_baseline=false).',
+        source === 'dom'
+          ? 'Cards were read from the rendered listing; yearless dates are assumed to be the current year.'
+          : null,
+      ].filter((n): n is string => Boolean(n));
+
+      return { ...diff, baselineUpdated, note: notes.join(' ') || null };
     }),
   );
 
@@ -375,7 +696,7 @@ export function registerTools(server: McpServer): void {
     {
       title: 'Health check the WeMakeDevs site parsers',
       description:
-        'Run live checks against wemakedevs.org (via TinyFish Fetch, ttl=0): listing pages parse, detail page retains its sections/FAQ, scholarships page intact. Fails loudly — use it to detect when the site changed and a tool broke. Costs one Fetch call per target.',
+        'Run live checks against wemakedevs.org (via TinyFish Fetch, ttl=0): hackathon listing/detail/schedule/resources/rules, meetups, careers, scholarships and the blog RSS feed. Fails loudly — use it to detect when the site changed and a tool broke. Costs one Fetch call per target.',
       inputSchema: z.object({
         target: targetEnum.default('all')
           .describe('Which check to run; "all" runs every check.'),

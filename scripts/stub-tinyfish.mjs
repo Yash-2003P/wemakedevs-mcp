@@ -24,9 +24,13 @@ const PAGES = new Map([
   ['https://www.wemakedevs.org/hackathons', 'hackathons.html'],
   ['https://www.wemakedevs.org/hackathons/switch', 'switch.html'],
   ['https://www.wemakedevs.org/hackathons/switch/rules', 'rules.html'],
+  ['https://www.wemakedevs.org/hackathons/switch/schedule', 'schedule.html'],
+  ['https://www.wemakedevs.org/hackathons/switch/resources', 'resources.html'],
   ['https://www.wemakedevs.org/meetups', 'meetups.html'],
   ['https://www.wemakedevs.org/careers', 'careers.html'],
   ['https://www.wemakedevs.org/scholarships', 'scholarships.html'],
+  ['https://www.wemakedevs.org/blogs/rss.xml', 'blog-rss.xml'],
+  ['https://www.wemakedevs.org/blogs/wispr', 'blog-post.html'],
 ]);
 
 const AGENT_RESULT = {
