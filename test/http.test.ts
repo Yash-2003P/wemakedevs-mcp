@@ -1,8 +1,9 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
+import { request as httpRequest, type IncomingHttpHeaders } from 'node:http';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-import { startHttpServer } from '../src/http.js';
+import { startHttpServer, type HttpOptions } from '../src/http.js';
 
 const silent = () => {};
 const opened: Array<{ close: (cb?: () => void) => unknown }> = [];
@@ -13,13 +14,14 @@ after(() => {
   servers.clear();
 });
 
-async function boot(key: string, options: { token?: string; host?: string } = {}) {
+async function boot(key: string, options: Omit<HttpOptions, 'port' | 'logger'> = {}) {
   const { server, port } = await startHttpServer({ port: 0, logger: silent, ...options });
   servers.set(key, { server, port });
   return port;
 }
 
 const HEADERS = { 'content-type': 'application/json', accept: 'application/json, text/event-stream' };
+const INITIALIZE = { jsonrpc: '2.0', id: 1, method: 'initialize' };
 const rpc = (port: number, body: unknown, headers: Record<string, string> = {}) =>
   fetch(`http://127.0.0.1:${port}/mcp`, {
     method: 'POST',
@@ -27,12 +29,38 @@ const rpc = (port: number, body: unknown, headers: Record<string, string> = {}) 
     body: JSON.stringify(body),
   });
 
+/** Send a request whose Host header the caller controls (fetch would override it). */
+function rawRpc(
+  port: number,
+  body: unknown,
+  headers: Record<string, string> = {},
+): Promise<{ status: number; headers: IncomingHttpHeaders; body: string }> {
+  const payload = JSON.stringify(body);
+  return new Promise((resolve, reject) => {
+    const req = httpRequest(
+      { host: '127.0.0.1', port, path: '/mcp', method: 'POST', headers: { ...HEADERS, ...headers } },
+      (res) => {
+        let data = '';
+        res.setEncoding('utf8');
+        res.on('data', (chunk) => (data += chunk));
+        res.on('end', () =>
+          resolve({ status: res.statusCode ?? 0, headers: res.headers, body: data }),
+        );
+      },
+    );
+    req.on('error', reject);
+    req.end(payload);
+  });
+}
+
 let anonymousPort: number;
 let tokenPort: number;
+let extraHostPort: number;
 
 before(async () => {
   anonymousPort = await boot('anonymous');
   tokenPort = await boot('token', { token: 'test-token' });
+  extraHostPort = await boot('extra-host', { allowedHosts: ['mcp.example.test'] });
 });
 
 test('http: /health reports the Streamable HTTP transport', async () => {
@@ -76,9 +104,54 @@ test('http: a cross-origin browser request is refused', async () => {
   const res = await fetch(`http://127.0.0.1:${anonymousPort}/mcp`, {
     method: 'POST',
     headers: { ...HEADERS, origin: 'http://evil.example' },
-    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize' }),
+    body: JSON.stringify(INITIALIZE),
   });
   assert.equal(res.status, 403);
+});
+
+test('http: origin lookalikes are refused, not prefix-matched', async () => {
+  for (const origin of [
+    'http://localhost.evil.com',
+    'http://127.0.0.1.evil.com',
+    'http://evil.com/localhost',
+    'http://evil.com?http://localhost',
+    'null',
+  ]) {
+    const res = await rpc(anonymousPort, INITIALIZE, { origin });
+    assert.equal(res.status, 403, `expected 403 for Origin: ${origin}`);
+  }
+});
+
+test('http: an allowed loopback origin is echoed in CORS headers', async () => {
+  const origin = 'http://localhost:5173';
+  const res = await rpc(anonymousPort, INITIALIZE, { origin });
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get('access-control-allow-origin'), origin);
+  assert.match(res.headers.get('vary') ?? '', /origin/i);
+});
+
+test('http: a spoofed Host header is refused before the body is handled', async () => {
+  const res = await rawRpc(anonymousPort, INITIALIZE, { host: 'evil.example' });
+  assert.equal(res.status, 403);
+  assert.match(res.body, /Host not allowed/);
+
+  const rawHealth = await new Promise<number>((resolve, reject) => {
+    const req = httpRequest(
+      { host: '127.0.0.1', port: anonymousPort, path: '/health', method: 'GET', headers: { host: 'evil.example' } },
+      (res) => {
+        res.resume();
+        resolve(res.statusCode ?? 0);
+      },
+    );
+    req.on('error', reject);
+    req.end();
+  });
+  assert.equal(rawHealth, 403);
+});
+
+test('http: a configured extra Host header is accepted verbatim', async () => {
+  const res = await rawRpc(extraHostPort, INITIALIZE, { host: 'mcp.example.test' });
+  assert.equal(res.status, 200);
 });
 
 test('http: bearer token is enforced when configured', async () => {

@@ -57,6 +57,8 @@ function splitList(value: string | undefined): string[] {
     .filter(Boolean);
 }
 
+const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '::1']);
+
 function stripBrackets(host: string): string {
   return host.startsWith('[') && host.endsWith(']') ? host.slice(1, -1) : host;
 }
@@ -66,14 +68,61 @@ function hostHeaderForm(host: string): string {
   return bare.includes(':') ? `[${bare}]` : bare;
 }
 
-function originForm(host: string): string {
-  const bare = stripBrackets(host);
-  return bare.includes(':') ? `http://[${bare}]` : `http://${bare}`;
+function resolveBindHost(value?: string): string {
+  const candidate = (value ?? process.env.HOST ?? '127.0.0.1').trim();
+  return candidate === '' ? '127.0.0.1' : candidate;
 }
 
 function isLoopback(host: string): boolean {
-  const bare = stripBrackets(host).toLowerCase();
-  return bare === '127.0.0.1' || bare === 'localhost' || bare === '::1' || bare === '';
+  return LOOPBACK_HOSTS.has(stripBrackets(host).toLowerCase());
+}
+
+/** Parse an Origin header into its canonical serialization, or null if invalid. */
+function normalizeOrigin(value: string): string | null {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
+    if (url.username || url.password) return null;
+    if (url.pathname !== '/' || url.search || url.hash) return null;
+    return url.origin.toLowerCase();
+  } catch {
+    return null;
+  }
+}
+
+function isLoopbackOrigin(origin: string): boolean {
+  const normalized = normalizeOrigin(origin);
+  if (!normalized) return false;
+  const hostname = stripBrackets(new URL(normalized).hostname).toLowerCase();
+  return LOOPBACK_HOSTS.has(hostname);
+}
+
+/** Host header values this process will answer to, exact match including port. */
+function allowedHostValues(bindHost: string, port: number, extraHosts: string[]): string[] {
+  const values = new Set<string>();
+  const add = (host: string, appendPort: boolean) => {
+    const normalized = host.trim().toLowerCase();
+    if (!normalized) return;
+    values.add(normalized);
+    if (appendPort && port > 0) values.add(`${hostHeaderForm(normalized)}:${port}`);
+  };
+
+  add(bindHost, true);
+  if (isLoopback(bindHost)) {
+    add('127.0.0.1', true);
+    add('localhost', true);
+    add('::1', true);
+  }
+  // Extra hosts are matched verbatim: include the port if the Host header has one.
+  for (const host of extraHosts) add(host, false);
+  return [...values];
+}
+
+/** Same-origin value for the address this process is bound to. */
+function selfOrigin(bindHost: string, port: number): string | null {
+  const bare = stripBrackets(bindHost);
+  if (!bare || bare === '0.0.0.0' || bare === '::') return null;
+  return `http://${hostHeaderForm(bare)}${port > 0 ? `:${port}` : ''}`;
 }
 
 function safeEqual(a: string, b: string): boolean {
@@ -94,13 +143,13 @@ function sendJson(res: ServerResponse, status: number, body: unknown): void {
 }
 
 function jsonRpcError(status: number, res: ServerResponse, code: number, message: string): void {
-  sendJson(res, status, { jsonrpc: '2.0', error: { code: -32000, message }, id: null });
+  sendJson(res, status, { jsonrpc: '2.0', error: { code, message }, id: null });
 }
 
 /** Build the MCP Streamable HTTP request handler. */
 export function buildMcpHttpHandler(options: HttpOptions = {}): HttpRequestHandler {
   const logger = options.logger ?? ((message: string) => console.error(message));
-  const bindHost = options.host ?? process.env.HOST ?? '127.0.0.1';
+  const bindHost = resolveBindHost(options.host);
   const token = options.token ?? process.env.MCP_HTTP_TOKEN ?? '';
   const extraOrigins = splitList(process.env.MCP_HTTP_ORIGINS).concat(options.allowedOrigins ?? []);
   const extraHosts = splitList(process.env.MCP_HTTP_HOSTS).concat(options.allowedHosts ?? []);
@@ -122,11 +171,29 @@ export function buildMcpHttpHandler(options: HttpOptions = {}): HttpRequestHandl
   };
 
   async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    // DNS-rebinding protection: answer only to Host values we expect. This is
+    // checked before the body is read, so a spoofed Host cannot reach the SDK.
+    const hostHeader = typeof req.headers.host === 'string' ? req.headers.host.trim().toLowerCase() : '';
+    if (!hostHeader || !requestHosts().includes(hostHeader)) {
+      jsonRpcError(403, res, -32603, 'Host not allowed');
+      return;
+    }
+
     const origin = typeof req.headers.origin === 'string' ? req.headers.origin : undefined;
+    if (origin && !isOriginAllowed(origin)) {
+      jsonRpcError(403, res, -32603, 'Origin not allowed');
+      return;
+    }
+    if (origin) {
+      // Echo only the validated origin; never reflect arbitrary input.
+      res.setHeader('access-control-allow-origin', origin);
+      res.setHeader('vary', 'origin');
+      res.setHeader('access-control-expose-headers', 'mcp-protocol-version');
+    }
 
     // CORS preflight, only for allowlisted browser origins.
     if (req.method === 'OPTIONS') {
-      if (!origin || !isOriginAllowed(origin)) {
+      if (!origin) {
         jsonRpcError(403, res, -32603, 'Origin not allowed');
         return;
       }
@@ -135,6 +202,7 @@ export function buildMcpHttpHandler(options: HttpOptions = {}): HttpRequestHandl
         'access-control-allow-methods': 'POST, GET, DELETE, OPTIONS',
         'access-control-allow-headers': 'content-type, authorization, mcp-protocol-version, mcp-session-id',
         'access-control-max-age': '86400',
+        'vary': 'origin',
         'content-length': '0',
       });
       res.end();
@@ -164,11 +232,6 @@ export function buildMcpHttpHandler(options: HttpOptions = {}): HttpRequestHandl
       return;
     }
 
-    if (origin && !isOriginAllowed(origin)) {
-      jsonRpcError(403, res, -32603, 'Origin not allowed');
-      return;
-    }
-
     if (token) {
       const header = req.headers.authorization ?? '';
       const supplied = header.startsWith('Bearer ') ? header.slice('Bearer '.length) : '';
@@ -186,22 +249,14 @@ export function buildMcpHttpHandler(options: HttpOptions = {}): HttpRequestHandl
       return;
     }
 
-    const localPort = options.port ?? 0;
-
-    const hostHeaderValue = req.headers.host ?? '';
-    const allowedHosts = [
-      bindHost.toLowerCase(),
-      hostHeaderValue.trim().toLowerCase(),
-      ...extraHosts.map((h) => h.toLowerCase()),
-    ].filter(Boolean);
-
-    const allowedOrigins = [
-      `${originForm(bindHost)}${localPort ? `:${localPort}` : ''}`,
-      `http://127.0.0.1${localPort ? `:${localPort}` : ''}`,
-      `http://localhost${localPort ? `:${localPort}` : ''}`,
-      `http://[::1]${localPort ? `:${localPort}` : ''}`,
-      ...extraOrigins,
-    ].filter(Boolean);
+    const transportHosts = requestHosts();
+    const transportOrigins = requestOrigins();
+    if (origin) {
+      // The origin already passed isOriginAllowed (loopback origins on any
+      // port are allowed), so include its exact value for the SDK's own check.
+      const normalized = normalizeOrigin(origin);
+      if (normalized && !transportOrigins.includes(normalized)) transportOrigins.push(normalized);
+    }
 
     const server = new McpServer({ name: SERVER_NAME, version: SERVER_VERSION });
     registerTools(server);
@@ -213,8 +268,8 @@ export function buildMcpHttpHandler(options: HttpOptions = {}): HttpRequestHandl
       enableJsonResponse: true,
       maxRequestBodySize: MAX_BODY_BYTES,
       enableDnsRebindingProtection: true,
-      allowedHosts: Array.from(new Set(allowedHosts)),
-      allowedOrigins: Array.from(new Set(allowedOrigins)),
+      allowedHosts: transportHosts,
+      allowedOrigins: transportOrigins,
     });
 
     let closed = false;
@@ -231,24 +286,27 @@ export function buildMcpHttpHandler(options: HttpOptions = {}): HttpRequestHandl
     cleanup();
   }
 
+  /** Exact Host header values accepted by this process. */
+  function requestHosts(): string[] {
+    return allowedHostValues(bindHost, options.port ?? 0, extraHosts);
+  }
+
+  /** Exact origins accepted beyond loopback, which is always allowed. */
+  function requestOrigins(): string[] {
+    const origins = new Set<string>();
+    const own = selfOrigin(bindHost, options.port ?? 0);
+    if (own) origins.add(own);
+    for (const raw of extraOrigins) {
+      const normalized = normalizeOrigin(raw);
+      if (normalized) origins.add(normalized);
+    }
+    return [...origins];
+  }
+
   function isOriginAllowed(origin: string): boolean {
-    const normalized = origin.toLowerCase();
-    const extras = new Set(extraOrigins.map((o) => o.toLowerCase()));
-    // No Origin header at all is the normal case for MCP clients and curl.
-    const defaultAllowed = [
-      'http://127.0.0.1',
-      'http://localhost',
-      'http://[::1]',
-      'http://127.0.0.1:',
-      'http://localhost:',
-      'http://[::1]:',
-      'https://127.0.0.1',
-      'https://localhost',
-    ];
-    if (extras.has(normalized)) return true;
-    if (defaultAllowed.some((prefix) => normalized === prefix || normalized.startsWith(prefix))) return true;
-    // Also allow any explicit http(s) entry in the extras list.
-    return [...extras].some((entry) => entry.startsWith(normalized) || normalized.startsWith(entry));
+    if (isLoopbackOrigin(origin)) return true;
+    const normalized = normalizeOrigin(origin);
+    return normalized !== null && requestOrigins().includes(normalized);
   }
 }
 
@@ -256,7 +314,7 @@ export function buildMcpHttpHandler(options: HttpOptions = {}): HttpRequestHandl
 export async function startHttpServer(
   options: HttpOptions = {},
 ): Promise<{ server: ReturnType<typeof createServer>; port: number }> {
-  const host = options.host ?? process.env.HOST ?? '127.0.0.1';
+  const host = resolveBindHost(options.host);
   const requestedPort = options.port ?? Number(process.env.PORT ?? 3000);
   const token = options.token ?? process.env.MCP_HTTP_TOKEN ?? '';
   const logger = options.logger ?? ((message: string) => console.error(message));
