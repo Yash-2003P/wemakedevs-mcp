@@ -3,6 +3,14 @@
   "version": "0.1.0",
   "description": "16 typed MCP tools for wemakedevs.org — hackathons, timelines, resources, rules, blogs, meetups, scholarships and careers — read live via TinyFish. No canned data.",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Yash-2003P/wemakedevs-mcp.git"
+  },
+  "homepage": "https://github.com/Yash-2003P/wemakedevs-mcp#readme",
+  "bugs": {
+    "url": "https://github.com/Yash-2003P/wemakedevs-mcp/issues"
+  },
   "type": "module",
   "bin": {
     "wemakedevs-mcp": "./dist/src/index.js"

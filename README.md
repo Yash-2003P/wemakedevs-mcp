@@ -1,5 +1,7 @@
 # wemakedevs-mcp
 
+[![CI](https://github.com/Yash-2003P/wemakedevs-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/Yash-2003P/wemakedevs-mcp/actions/workflows/ci.yml)
+
 An MCP (Model Context Protocol) server that turns **wemakedevs.org** — a site with no documented public API — into **16 typed agent tools**. Hackathons, timelines, resource hubs, rules, blogs, meetups, scholarships and careers become clean, structured JSON an AI agent can actually use. [TinyFish](https://tinyfish.ai) does the real web reading on every call; there is no cached or canned data in the serving path.
 
 > Built for the TinyFish “Site → MCP” bounty. Not affiliated with WeMakeDevs.
