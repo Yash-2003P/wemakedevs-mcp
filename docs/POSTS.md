@@ -1,6 +1,6 @@
 # Submission posts (ready to publish)
 
-Both posts are drafted from verified live behavior. Replace `[REPO_LINK]` and `[DEMO_LINK]` after the GitHub push. Nothing here claims the package is on npm.
+Both posts are drafted from verified live behavior. The public repo is **https://github.com/Yash-2003P/wemakedevs-mcp** and CI is green. Nothing here claims the package is on npm.
 
 ---
 
@@ -31,8 +31,8 @@ The live site even disagrees with itself: the listing card says $8000, the detai
 
 Built with TypeScript, the v2 `@modelcontextprotocol/server` SDK, zod and cheerio.
 
-Repo: [REPO_LINK]
-Transcript: [DEMO_LINK]
+Repo: https://github.com/Yash-2003P/wemakedevs-mcp
+Transcript: https://github.com/Yash-2003P/wemakedevs-mcp/blob/main/docs/DEMO.md
 
 @TinyFish — thanks for the bounty prompt. #MCP #AIAgents #TinyFish #BuildInPublic
 
@@ -57,12 +57,12 @@ Built for the Site → MCP bounty. Hackathons, timelines, rules, resource links,
 
 Live run: 2 upcoming hackathons, 6 timeline milestones, 21 resource links, registration status read from the client-rendered panel (7,828 registered in the final run).
 
-Repo: [REPO_LINK]
+Repo: https://github.com/Yash-2003P/wemakedevs-mcp
 
 Try it from source:
 
 ```bash
-git clone [REPO_LINK]
+git clone https://github.com/Yash-2003P/wemakedevs-mcp
 cd wemakedevs-mcp
 npm ci && npm run build
 TINYFISH_API_KEY=... node dist/src/index.js
@@ -74,8 +74,8 @@ Happy to hear feedback — especially from anyone using it from Claude Code or a
 
 ## Publishing checklist
 
-1. Push the repo and confirm the build instructions work from a clean clone.
-2. Replace `[REPO_LINK]` and `[DEMO_LINK]`.
+1. [x] Push the repo and confirm the build instructions work from a clean clone.
+2. [x] Fill in the repo and transcript links.
 3. Post on LinkedIn; select TinyFish's company page as the mention; attach a screenshot.
 4. Post the Discord version in **#showcase** on the TinyFish Discord.
 5. Save both post URLs for the submission form.

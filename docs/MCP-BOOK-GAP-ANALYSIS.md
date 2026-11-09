@@ -57,7 +57,7 @@ You shared the table of contents of an MCP book (Python edition). I do not have 
 
 - [x] Clean copy works: `npm ci` → `npm run build` → 31/31 tests → 9/9 offline health (Node 24 and Node 20 Alpine).
 - [x] Branch renamed `master` → `main`, so `.github/workflows/ci.yml` actually runs on push.
-- [ ] Replace the README clone placeholder with the final GitHub URL after the repo is created.
+- [x] README and docs use the public GitHub URL: **https://github.com/Yash-2003P/wemakedevs-mcp**.
 
 **P1 — small, high value**
 
@@ -83,12 +83,12 @@ You shared the table of contents of an MCP book (Python edition). I do not have 
 ## Verification behind this review
 
 ```text
-clean copy          npm ci → build → 31/31 tests → 9/9 offline health (Node 24, Node 20 Alpine)
+clean clone         GitHub → npm ci → build → 31/31 tests → 9/9 offline health (Node 24, Node 20 Alpine)
 live smoke (stdio)  tools 16/16; 15 fast tools PASS; --all adds Agent PASS
 live smoke (http)   401 without/with a wrong token; 16 tools listed; live tool call PASS
 protocol eras       Inspector 2.13 legacy + modern over stdio and HTTP; 0 schema errors
 Agent latency       22 s, 39 s, 41 s, 61.8 s across live runs
-branch              main (CI trigger fixed)
+branch              main (CI green on push, run 42580373658)
 http security       non-loopback bind refuses without MCP_HTTP_TOKEN; spoofed Host → 403 before body read; Origin lookalikes → 403; loopback origin echoed
 ```
 

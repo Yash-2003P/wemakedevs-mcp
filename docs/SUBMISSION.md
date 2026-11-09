@@ -10,40 +10,28 @@ Bounty: Turn a website with no public API into a permanent agent tool (MCP serve
 - [x] Live TinyFish **Agent** path verified (`check_registration_status`: state=closed, 7,828 registered in the final run, 22 s; earlier runs 39–62 s)
 - [x] Live `npm run health` → **9/9 green**; offline health → 9/9 green
 - [x] Unit tests → **31/31 green** on Node 24 and Node 20 (Alpine/Docker)
-- [x] Clean-clone check: `npm ci` → build → 31/31 tests → 9/9 offline health
+- [x] Clean-clone check from GitHub: `npm ci` → build → 31/31 tests → 9/9 offline health; Inspector legacy + modern pass on the clone
 - [x] Reusable live smoke client: `npm run smoke` (15 fast tools) and `npm run smoke:all` (16/16, Agent included)
 - [x] Streamable HTTP transport (`src/http.ts`, `npm run start:http`): stateless `POST /mcp`, bearer auth, exact Host/Origin allowlists; `npm run smoke:http` green including a live tool call
 - [x] **Both protocol eras**: legacy 2025-11-25 and modern 2026-07-28, over stdio and HTTP. Inspector 2.13 `tools/list --strict` → 0 errors; live modern `tools/call` verified
 - [x] Security regressions covered: spoofed `Host` → 403 before body read; `http://localhost.evil.com` and other Origin lookalikes → 403; loopback origin CORS echo; explicit extra Host accepted
 - [x] Real multi-step run through a stdio MCP client (list → detail → schedule → resources → registration), captured in full at [docs/DEMO.md](DEMO.md) — all 16 tools live-exercised across the verification session
-- [x] LinkedIn and Discord post drafts → [docs/POSTS.md](POSTS.md) (publish after the repo has a public URL)
+- [x] LinkedIn and Discord post drafts → [docs/POSTS.md](POSTS.md) (repo URL filled in; ready to publish)
 - [x] UI decision recorded: no MCP Apps UI for this submission → [docs/UI-ASSESSMENT.md](UI-ASSESSMENT.md)
-- [ ] Push the repo to GitHub and add the public link
+- [x] Push the repo to GitHub: **https://github.com/Yash-2003P/wemakedevs-mcp** — CI on `main` is green
 - [ ] **LinkedIn post about the build, tagging TinyFish** (required)
 - [ ] Share it in **#showcase** on the TinyFish Discord
 - [ ] Optional: publish to npm so `npx wemakedevs-mcp` works
 - [ ] Optional: OAuth flow in front of the HTTP transport for ChatGPT connectors
 
-## Create the public repo (you)
+## Public repo (done)
 
-The local branch is now `main`, so the CI workflow actually runs on push. The working tree is clean and the build is verified from a clean clone.
+**https://github.com/Yash-2003P/wemakedevs-mcp**
 
-If the repo does not exist yet:
-
-```bash
-cd /home/vish9/wemakedevs-mcp
-gh repo create Yash-2003P/wemakedevs-mcp --public --source=. --remote=origin --push
-```
-
-If you create it in the browser, then:
-
-```bash
-cd /home/vish9/wemakedevs-mcp
-git remote add origin https://github.com/<owner>/wemakedevs-mcp.git
-git push -u origin main
-```
-
-After the push, replace the README clone placeholder and the `[REPO_LINK]` / `[DEMO_LINK]` placeholders in [docs/POSTS.md](POSTS.md) with the public URLs.
+- Branch `main`, remote `origin`, working tree clean.
+- GitHub Actions CI run [42580373658](https://github.com/Yash-2003P/wemakedevs-mcp/actions/runs/42580373658) — `build-test` job green on Node 24.
+- A fresh `git clone` of the public repo passed `npm ci` → `npm test` (31/31) → 9/9 offline health, plus Inspector in both protocol eras.
+- README, [docs/POSTS.md](POSTS.md) and this checklist use the public URL.
 
 ## What the submission notes must say
 

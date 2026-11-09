@@ -137,7 +137,7 @@ Not covered by unit tests: live TinyFish response shapes, live latency, Agent ou
 - `/careers` can legitimately be empty; the tool returns `[]` with a note.
 - Archive events (archive.wemakedevs.org) are listed and parseable as detail pages, best-effort fidelity.
 - External events (devpost/Luma) listed with URLs; `get_hackathon` refuses non-WeMakeDevs hosts.
-- Agent latency is 20–120 s; clients need a matching request timeout. Live runs: 39 s, 41 s and 62 s (the last exceeds the SDK's default 60 s).
+- Agent latency is 20–120 s; clients need a matching request timeout. Live runs: 22 s, 39 s, 41 s and 62 s (the last exceeds the SDK's default 60 s).
 - TinyFish Agent `output_schema` rejects `additionalProperties` and `description`; only the minimal subset is sent.
 - Snapshot diffs are per-machine (`~/.cache/wemakedevs-mcp` by default); there is no shared server-side history.
 - Fixture snapshot is 2026-11-05; parser tests can rot as the site changes — CI health check is the live guard.
@@ -149,9 +149,9 @@ Not covered by unit tests: live TinyFish response shapes, live latency, Agent ou
 
 ## 11. Submission state vs bounty checklist
 
-Done: repo, README (stdio + Streamable HTTP install, 16-tool table, real live transcript, TinyFish usage, health docs, limitations), git history, LICENSE, SUBMISSION.md checklist, CI (build/test/offline health), weekly live health workflow, .env.example, live-verified Fetch and Agent, live 9/9 health, real multi-step stdio run, Streamable HTTP transport with bearer auth + Origin/Host protection, live smoke tests for both transports.
+Done: public GitHub repo at **https://github.com/Yash-2003P/wemakedevs-mcp** with green CI on `main`; README (stdio + Streamable HTTP install, 16-tool table, real live transcript, TinyFish usage, health docs, limitations, no-UI rationale); git history; LICENSE; SUBMISSION.md checklist; CI (build/test/offline health); weekly live health workflow; .env.example; live-verified Fetch and Agent; live 9/9 health; real multi-step stdio run; Streamable HTTP transport with bearer auth + exact Host/Origin protection; both protocol eras verified with Inspector 2.13; clean clone re-verified; live smoke tests for both transports.
 
-Not done: GitHub repo creation & push; LinkedIn post tagging TinyFish; #showcase Discord post; npm publish; OAuth flow for ChatGPT connectors.
+Not done: LinkedIn post tagging TinyFish; #showcase Discord post; npm publish; OAuth flow for ChatGPT connectors.
 
 ## 12. Risks
 
