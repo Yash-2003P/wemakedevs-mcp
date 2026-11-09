@@ -85,6 +85,32 @@ test('http: an MCP client lists all 16 tools over Streamable HTTP', async () => 
   }
 });
 
+test('http: a modern 2026-07-28 request lists tools without initialize', async () => {
+  const res = await fetch(`http://127.0.0.1:${anonymousPort}/mcp`, {
+    method: 'POST',
+    headers: {
+      ...HEADERS,
+      'mcp-protocol-version': '2026-07-28',
+      'mcp-method': 'tools/list',
+    },
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/list',
+      params: {
+        _meta: {
+          'io.modelcontextprotocol/protocolVersion': '2026-07-28',
+          'io.modelcontextprotocol/clientCapabilities': {},
+          'io.modelcontextprotocol/clientInfo': { name: 'http-test', version: '0.0.0' },
+        },
+      },
+    }),
+  });
+  assert.equal(res.status, 200);
+  const body = (await res.json()) as { result?: { tools?: unknown[] } };
+  assert.equal(body.result?.tools?.length, 16);
+});
+
 test('http: routing rejects unknown paths and non-POST on /mcp', async () => {
   assert.equal((await fetch(`http://127.0.0.1:${anonymousPort}/nope`)).status, 404);
   assert.equal((await fetch(`http://127.0.0.1:${anonymousPort}/mcp`)).status, 405);

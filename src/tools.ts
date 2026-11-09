@@ -1,4 +1,4 @@
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import { WemakedevsError } from './errors.js';
 import { fetchPages, runAgent } from './tinyfish.js';

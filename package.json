@@ -1,7 +1,7 @@
 {
   "name": "wemakedevs-mcp",
   "version": "0.1.0",
-  "description": "16 typed MCP tools for wemakedevs.org \u2014 hackathons, timelines, resources, rules, blogs, meetups, scholarships and careers \u2014 read live via TinyFish. No canned data.",
+  "description": "16 typed MCP tools for wemakedevs.org — hackathons, timelines, resources, rules, blogs, meetups, scholarships and careers — read live via TinyFish. No canned data.",
   "license": "MIT",
   "type": "module",
   "bin": {
@@ -28,11 +28,13 @@
     "smoke:http": "npm run build && node scripts/smoke-http.mjs"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.32.2",
+    "@modelcontextprotocol/node": "^2.1.2",
+    "@modelcontextprotocol/server": "^2.4.0",
     "cheerio": "^1.2.0",
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
     "@types/node": "^24.0.0",
     "typescript": "^5.6.0"
   },

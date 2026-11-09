@@ -21,8 +21,8 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { realpathSync } from 'node:fs';
 import { timingSafeEqual } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
+import { createMcpHandler, McpServer } from '@modelcontextprotocol/server';
+import { toNodeHandler } from '@modelcontextprotocol/node';
 import { registerTools } from './tools.js';
 
 export const SERVER_NAME = 'wemakedevs-mcp';
@@ -43,10 +43,11 @@ export interface HttpOptions {
   logger?: (message: string) => void;
 }
 
-export type HttpRequestHandler = (
-  req: IncomingMessage,
-  res: ServerResponse,
-) => void | Promise<void>;
+export interface HttpRequestHandler {
+  (req: IncomingMessage, res: ServerResponse): void | Promise<void>;
+  /** Releases the modern handler's in-flight exchanges. */
+  close?: () => Promise<void>;
+}
 
 const MAX_BODY_BYTES = Number(process.env.MCP_HTTP_MAX_BODY_BYTES ?? 4 * 1024 * 1024);
 
@@ -154,7 +155,30 @@ export function buildMcpHttpHandler(options: HttpOptions = {}): HttpRequestHandl
   const extraOrigins = splitList(process.env.MCP_HTTP_ORIGINS).concat(options.allowedOrigins ?? []);
   const extraHosts = splitList(process.env.MCP_HTTP_HOSTS).concat(options.allowedHosts ?? []);
 
-  return async (req, res) => {
+  // One handler serves both protocol eras: 2025 clients get the stateless
+  // initialize flow, 2026-07-28 clients get server/discover + per-request
+  // metadata. A fresh McpServer instance is built for every request.
+  const mcpHandler = createMcpHandler(
+    () => {
+      const server = new McpServer(
+        { name: SERVER_NAME, version: SERVER_VERSION },
+        { maxToolInputElements: 256 },
+      );
+      registerTools(server);
+      return server;
+    },
+    {
+      legacy: 'stateless',
+      maxRequestBodySize: MAX_BODY_BYTES,
+      onerror: (err) => logger(`MCP handler error: ${String(err)}`),
+    },
+  );
+  const nodeHandler = toNodeHandler(mcpHandler, {
+    maxRequestBodySize: MAX_BODY_BYTES,
+    onerror: (err) => logger(`HTTP adapter error: ${String(err)}`),
+  });
+
+  const handler: HttpRequestHandler = async (req, res) => {
     const started = Date.now();
     try {
       await handle(req, res);
@@ -169,6 +193,8 @@ export function buildMcpHttpHandler(options: HttpOptions = {}): HttpRequestHandl
       logger(`${req.method ?? '?'} ${req.url ?? '?'} → ${res.statusCode} (${Date.now() - started} ms)`);
     }
   };
+  handler.close = () => mcpHandler.close();
+  return handler;
 
   async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
     // DNS-rebinding protection: answer only to Host values we expect. This is
@@ -249,41 +275,9 @@ export function buildMcpHttpHandler(options: HttpOptions = {}): HttpRequestHandl
       return;
     }
 
-    const transportHosts = requestHosts();
-    const transportOrigins = requestOrigins();
-    if (origin) {
-      // The origin already passed isOriginAllowed (loopback origins on any
-      // port are allowed), so include its exact value for the SDK's own check.
-      const normalized = normalizeOrigin(origin);
-      if (normalized && !transportOrigins.includes(normalized)) transportOrigins.push(normalized);
-    }
-
-    const server = new McpServer({ name: SERVER_NAME, version: SERVER_VERSION });
-    registerTools(server);
-    const transport = new StreamableHTTPServerTransport({
-      // Stateless: one server per request keeps this deployable on any host
-      // without sticky sessions, and matches a read-only tool surface.
-      sessionIdGenerator: undefined,
-      // Plain JSON bodies are easier for non-SSE clients and curl.
-      enableJsonResponse: true,
-      maxRequestBodySize: MAX_BODY_BYTES,
-      enableDnsRebindingProtection: true,
-      allowedHosts: transportHosts,
-      allowedOrigins: transportOrigins,
-    });
-
-    let closed = false;
-    const cleanup = () => {
-      if (closed) return;
-      closed = true;
-      void transport.close().catch(() => undefined);
-      void server.close().catch(() => undefined);
-    };
-    res.on('close', cleanup);
-
-    await server.connect(transport);
-    await transport.handleRequest(req, res);
-    cleanup();
+    // Host, Origin, method and bearer checks have already run, so the SDK
+    // adapter only has to parse the body and dispatch the JSON-RPC message.
+    await nodeHandler(req, res);
   }
 
   /** Exact Host header values accepted by this process. */
@@ -326,7 +320,11 @@ export async function startHttpServer(
   }
 
   const handlerOptions: HttpOptions = { ...options };
-  const server = createServer(buildMcpHttpHandler(handlerOptions));
+  const handler = buildMcpHttpHandler(handlerOptions);
+  const server = createServer(handler);
+  server.on('close', () => {
+    void handler.close?.().catch(() => undefined);
+  });
   return new Promise((resolve, reject) => {
     server.once('error', reject);
     server.listen(requestedPort, host, () => {
