@@ -27,9 +27,9 @@ The fun part was the live surprises. Fetch strips `<script>`, so the Next.js pay
 
 The live site even disagrees with itself: the listing card says $8000, the detail page says $10,000. The agent reported both instead of quietly picking one.
 
-16 tools · 26 unit tests · 9/9 live health checks · a real end-to-end transcript in the repo · stdio by default, optional Streamable HTTP with bearer auth.
+16 tools · 31 unit tests · 9/9 live health checks · a real end-to-end transcript in the repo · stdio by default, optional Streamable HTTP with bearer auth. Serves both MCP protocol eras — legacy 2025-11-25 and modern 2026-07-28 — from one tool surface.
 
-Built with TypeScript, `@modelcontextprotocol/sdk`, zod and cheerio.
+Built with TypeScript, the v2 `@modelcontextprotocol/server` SDK, zod and cheerio.
 
 Repo: [REPO_LINK]
 Transcript: [DEMO_LINK]
@@ -51,10 +51,11 @@ Built for the Site → MCP bounty. Hackathons, timelines, rules, resource links,
 - **Fetch** (`ttl: 0`) reads every page; **Agent** opens the client-rendered registration panel in a real browser and returns state + registered count.
 - 16 tools with zod-typed inputs/outputs and structured JSON.
 - 9 live health checks that fail loudly when the site changes.
-- 20 unit tests; real end-to-end transcript in `docs/DEMO.md`.
+- 31 unit tests; real end-to-end transcript in `docs/DEMO.md`.
 - A diff tool compares the live listing with your last observation: added, removed, changed fields.
+- Legacy 2025-11-25 and modern 2026-07-28 MCP clients both supported, over stdio or HTTP.
 
-Live run: 1 ongoing + 3 upcoming hackathons, 6 timeline milestones, 21 resource links, registration open with 7,690 registered.
+Live run: 2 upcoming hackathons, 6 timeline milestones, 21 resource links, registration status read from the client-rendered panel (7,828 registered in the final run).
 
 Repo: [REPO_LINK]
 

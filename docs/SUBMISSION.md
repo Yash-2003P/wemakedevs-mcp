@@ -2,19 +2,22 @@
 
 Bounty: Turn a website with no public API into a permanent agent tool (MCP server). Deadline: **Tue 17 Nov 2026, 11:59 PM PT**.
 
-## Status (2026-11-07)
+## Status (2026-11-09)
 
 - [x] Repo with working build + README (from-source install; npm package not published)
 - [x] 16 typed MCP tools, zod-validated inputs and outputs
 - [x] Live TinyFish **Fetch** path verified against every page (ttl: 0, no canned data)
-- [x] Live TinyFish **Agent** path verified (`check_registration_status`: state=open, 7,689–7,694 registered across runs, 39–62 s)
+- [x] Live TinyFish **Agent** path verified (`check_registration_status`: state=closed, 7,828 registered in the final run, 22 s; earlier runs 39–62 s)
 - [x] Live `npm run health` → **9/9 green**; offline health → 9/9 green
-- [x] Unit tests → **20/20 green**
-- [x] Clean-clone check: `npm ci` → build → 20/20 tests → 9/9 offline health
+- [x] Unit tests → **31/31 green** on Node 24 and Node 20 (Alpine/Docker)
+- [x] Clean-clone check: `npm ci` → build → 31/31 tests → 9/9 offline health
 - [x] Reusable live smoke client: `npm run smoke` (15 fast tools) and `npm run smoke:all` (16/16, Agent included)
-- [x] Streamable HTTP transport (`src/http.ts`, `npm run start:http`): stateless `POST /mcp`, bearer auth, Origin/Host protection; `npm run smoke:http` green including a live tool call; 6 unit tests
+- [x] Streamable HTTP transport (`src/http.ts`, `npm run start:http`): stateless `POST /mcp`, bearer auth, exact Host/Origin allowlists; `npm run smoke:http` green including a live tool call
+- [x] **Both protocol eras**: legacy 2025-11-25 and modern 2026-07-28, over stdio and HTTP. Inspector 2.13 `tools/list --strict` → 0 errors; live modern `tools/call` verified
+- [x] Security regressions covered: spoofed `Host` → 403 before body read; `http://localhost.evil.com` and other Origin lookalikes → 403; loopback origin CORS echo; explicit extra Host accepted
 - [x] Real multi-step run through a stdio MCP client (list → detail → schedule → resources → registration), captured in full at [docs/DEMO.md](DEMO.md) — all 16 tools live-exercised across the verification session
 - [x] LinkedIn and Discord post drafts → [docs/POSTS.md](POSTS.md) (publish after the repo has a public URL)
+- [x] UI decision recorded: no MCP Apps UI for this submission → [docs/UI-ASSESSMENT.md](UI-ASSESSMENT.md)
 - [ ] Push the repo to GitHub and add the public link
 - [ ] **LinkedIn post about the build, tagging TinyFish** (required)
 - [ ] Share it in **#showcase** on the TinyFish Discord
@@ -63,9 +66,15 @@ After the push, replace the README clone placeholder and the `[REPO_LINK]` / `[D
 
 ```bash
 npm ci
-npm test                                         # 20/20
+npm test                                         # 31/31
 WEMAKEDEVS_MCP_HEALTH_OFFLINE=1 npm run health   # 9/9 offline
 TINYFISH_API_KEY=sk-... npm run health           # 9/9 live
+
+# Independent protocol check (both eras; strict schema report)
+npx -y @modelcontextprotocol/inspector --cli node dist/src/index.js \
+  --method tools/list --protocol-era legacy --strict
+npx -y @modelcontextprotocol/inspector --cli node dist/src/index.js \
+  --method tools/list --protocol-era modern --strict
 ```
 
 Then run the MCP server in Claude Code / OpenCode / any stdio client and record:

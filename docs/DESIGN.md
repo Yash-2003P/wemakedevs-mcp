@@ -2,7 +2,7 @@
 
 An MCP (Model Context Protocol) server that turns wemakedevs.org — a site with no documented public API — into typed agent tools. Hackathons, timelines, resource hubs, rules, blogs, meetups, scholarships and careers become structured JSON for any MCP client. TinyFish does the real web work behind every tool at run time.
 
-Status: **implemented and live-verified on 2026-11-07**. 16 tools, 26 unit tests, 9/9 live health checks green, every tool exercised through a real MCP stdio client against TinyFish Fetch and Agent, plus a live pass over the new Streamable HTTP transport.
+Status: **implemented and live-verified on 2026-11-09**. 16 tools, 31 unit tests, 9/9 live health checks green, every tool exercised through a real MCP stdio client against TinyFish Fetch and Agent, plus live passes over the Streamable HTTP transport. Both protocol eras are served: legacy **2025-11-25** and modern **2026-07-28**. Verified on Node 20 (Alpine/Docker) and Node 24, and with MCP Inspector 2.13 in both eras over stdio and HTTP.
 
 ## 1. Problem
 
@@ -25,13 +25,16 @@ From the TinyFish "Site → MCP" rules (v2026-11):
 3. **Read the rendered DOM, not the flight payload.** wemakedevs.org is Next.js, but live Fetch strips `<script>` blocks even with `include_selectors: ["body"]`, so `self.__next_f` / `"cards"` is unreachable. Verbatim body mode does preserve the server-rendered cards, section ids, FAQ `<details>` and resource links. The listing parser therefore reads card anchors (`<a><h3>title</h3><p>prize</p></a>` plus location/date chips) and converts display dates to ISO. The site prints a year only for non-current years, so a yearless display date means the current year; this is reported in output notes.
 4. **Loud failure everywhere.** All outputs zod-validated; any schema mismatch is a typed error (`SITE_CHANGED | VALIDATION_FAILED | FETCH_FAILED | AGENT_FAILED | NOT_FOUND | CONFIG | PARSE_FAILED`) with a hint pointing at `npm run health`. MCP responses set `isError: true`.
 5. **Leaderboard honesty.** 2 endpoints ≈ 100 pts. Adding more would be padding; deliberately not done.
-6. **stdio by default, Streamable HTTP opt-in.** `src/index.ts` stays stdio because that is what Claude Code/Desktop, Cursor, Zed and OpenCode speak. `src/http.ts` adds Streamable HTTP (`POST /mcp`, stateless, one short-lived `McpServer` per request, JSON responses) for remote hosts. The gap it closes is real (a TCP listener, not a bridge), the auth is a bearer token, and the safety defaults are: loopback bind, refusing a non-loopback bind without `MCP_HTTP_TOKEN`, `timingSafeEqual` comparison, Origin allowlist, and the transport's own Host allowlist for DNS-rebinding protection. OAuth is deliberately out of scope, so ChatGPT connectors still need a proxy — that is stated, not hidden.
+6. **stdio by default, Streamable HTTP opt-in, both protocol eras.** `src/index.ts` stays stdio because that is what Claude Code/Desktop, Cursor, Zed and OpenCode speak. `src/http.ts` adds Streamable HTTP (`POST /mcp`, stateless) for remote hosts. Both use SDK v2 (`@modelcontextprotocol/server` + `@modelcontextprotocol/node`): `serveStdio(factory)` negotiates the era on the opening exchange, and `createMcpHandler(factory, { legacy: 'stateless' })` + `toNodeHandler` serve legacy 2025-11-25 and modern 2026-07-28 requests from the same registrations. A modern request carries `MCP-Protocol-Version` and `Mcp-Method`; a legacy request uses `initialize`. The gap this closes is real (a TCP listener, not a bridge), the auth is a bearer token, and the safety defaults are: loopback bind, refusal to bind non-loopback without `MCP_HTTP_TOKEN`, `timingSafeEqual` comparison, exact-value Host/Origin allowlists, and a per-call input bound. OAuth is deliberately out of scope, so ChatGPT connectors still need a proxy — that is stated, not hidden.
+
+7. **No MCP Apps UI.** The official extension is optional; a tool-only server works in every host, while a `ui://` app only renders where the host implements the extension. The output is already typed JSON with a text fallback. The decision and the shape of a future timeline view are recorded in `docs/UI-ASSESSMENT.md`.
 
 ## 4. Architecture
 
 ```text
-MCP client ── stdio ───────────── src/index.ts   ─┐
-           └─ Streamable HTTP ── src/http.ts    ─┴─ registerTools(src/tools.ts)
+MCP client ── stdio ───────────── src/index.ts (serveStdio)          ─┐
+           └─ Streamable HTTP ── src/http.ts (createMcpHandler +
+                                  toNodeHandler; both eras)          ─┴─ registerTools(src/tools.ts)
     │  set TINYFISH_API_KEY
     ▼
     │  per tool: zod input → handler → zod output → {content[JSON], structuredContent}
@@ -44,14 +47,14 @@ MCP client ── stdio ───────────── src/index.ts   �
     └── src/healthcli.ts    `npm run health` CLI (JSON report, exit 1 on failure)
 test/parse.test.ts         parser tests against committed fixtures (node:test)
 test/diff.test.ts          display-date and snapshot-diff tests
-test/http.test.ts          Streamable HTTP transport: routing, 401/403, 16 tools over the wire
+test/http.test.ts          Streamable HTTP: routing, 401/403, 16 tools, modern 2026-07-28 request, Host/Origin bypass regressions
 test/fixtures/*.html       public pages snapshot 2026-11-05 + RSS/schedule/resources/blog post
 scripts/stub-tinyfish.mjs  opt-in local stub (frozen fixtures, NOT TinyFish)
 scripts/smoke.mjs         live smoke test: stdio, all 16 tools (npm run smoke / smoke:all)
 scripts/smoke-http.mjs    live smoke test: HTTP transport, auth + a real tool call
 ```
 
-Both transports register the same 16 tools; `src/http.ts` is a stateless wrapper (one short-lived `McpServer` per POST) and never touches tool logic.
+Both transports register the same 16 tools. `src/http.ts` is a stateless adapter around `createMcpHandler`/`toNodeHandler`; it owns the pre-dispatch auth, Host and Origin checks, `/health`, and body bounds, and never touches tool logic.
 
 Tool call flow: `fetchPages(url, {includeSelectors:['body']})` → `results[0].text` (HTML) → parser → zod → result. Agent flow: `runAgent(url, goal, output_schema)` → zod-validate → result.
 
@@ -104,21 +107,23 @@ hackathons-listing (≥10 cards, ≥1 ISO start date, sentinel present) · hacka
 - `.github/workflows/health.yml` — weekly live check; needs `secrets.TINYFISH_API_KEY`.
 - `health_check` MCP tool exposes the same checks to agents (isError=true when unhealthy).
 
-Live result on 2026-11-07: 9/9 green, 35 events parsed from the rendered DOM, all 35 with inferred ISO dates, 6 schedule milestones, 5 resource groups / 21 links, 20 RSS posts.
+Live result on 2026-11-09: 9/9 green, 35 events parsed from the rendered DOM, all 35 with inferred ISO dates, 6 schedule milestones, 5 resource groups / 21 links, 20 RSS posts.
 
 ## 8. Testing state
 
-`npm test` → 26 tests, all green:
+`npm test` → **31 tests**, all green on Node 20.20.2 (Alpine) and Node 24.21.0:
 
 - Hackathon flight extraction/dedupe/status classification (frozen "now" = 2026-11-05).
 - Display-date parsing: single day, same-month range, cross-month range, month-only, explicit year.
 - End-of-day inclusivity for date-only end dates.
 - Diff logic: baseline creation, added/removed/field-level changes, single-event scope.
 - Meetups, careers, scholarships, detail AST, FAQ, meta strip, HTML-leak check.
-- Streamable HTTP: `/health` shape, 16 tools over the wire via the SDK client, 404/405 routing, 403 on an unblessed Origin, 401 for a missing/wrong bearer token, and the refusal to bind a non-loopback address without a token.
+- Streamable HTTP: `/health` shape, 16 tools over the wire via the SDK client, 404/405 routing, 401 for a missing/wrong bearer token, refusal to bind non-loopback without a token.
+- **Modern era over HTTP:** a raw 2026-07-28 `tools/list` with per-request `_meta` and the required `MCP-Protocol-Version` / `Mcp-Method` headers returns 16 tools without `initialize`.
+- **Security regressions:** spoofed `Host` → 403 before body handling (including `/health`), including `req.headers.host` can never enter its own allowlist; `Origin` lookalikes (`http://localhost.evil.com`, userinfo/path tricks, `null`) → 403; an allowed loopback origin is echoed with CORS headers; an explicitly configured extra Host is accepted verbatim.
 - `npm run smoke` / `npm run smoke:all` (stdio, all 16 tools, live) and `npm run smoke:http` (HTTP transport, auth + one live tool call) are exercised manually, not in CI.
 
-Not covered by unit tests: live TinyFish response shapes, live latency, Agent output. These were verified manually through a stdio MCP client on 2026-11-07 (16 tools listed; Fetch tools returned live data; Agent returned `state=open` with `registeredCount` 7,689–7,694 in 39–62 s; live health 9/9).
+Not covered by unit tests: live TinyFish response shapes, live latency, Agent output. These were verified manually through stdio and HTTP clients on 2026-11-09 (16 tools listed; Fetch tools returned live data; Agent returned `state=closed` with `registeredCount=7828` in 22 s in the final `smoke:all` run; live health 9/9). Inspector 2.13 `tools/list --strict` reported **0 errors / 52 portability warnings** (nullable output fields emitted as `type: ["string","null"]`); the warnings are documented in the README limitations.
 
 ## 9. Error model
 
@@ -136,8 +141,10 @@ Not covered by unit tests: live TinyFish response shapes, live latency, Agent ou
 - TinyFish Agent `output_schema` rejects `additionalProperties` and `description`; only the minimal subset is sent.
 - Snapshot diffs are per-machine (`~/.cache/wemakedevs-mcp` by default); there is no shared server-side history.
 - Fixture snapshot is 2026-11-05; parser tests can rot as the site changes — CI health check is the live guard.
-- The Streamable HTTP transport is stateless and POST-only: no sessions, no standalone SSE stream, no resumability. Each POST spawns a short-lived `McpServer`.
-- HTTP auth is a bearer token only (`MCP_HTTP_TOKEN`, `timingSafeEqual`). It is not the OAuth flow ChatGPT connectors expect, so a ChatGPT connector still needs a proxy. Browser CORS is closed by default (unblessed `Origin` → 403).
+- The Streamable HTTP transport is stateless and POST-only: no sessions, no standalone SSE stream, no resumability. Both protocol eras are served, but a modern request must carry `MCP-Protocol-Version` and `Mcp-Method`; the SDK returns a descriptive `400` when either is missing.
+- HTTP auth is a bearer token only (`MCP_HTTP_TOKEN`, `timingSafeEqual`). It is not the OAuth flow ChatGPT connectors expect, so a ChatGPT connector still needs a proxy. Browser CORS is closed by default (unblessed `Origin` → 403); loopback origins are allowed on any port.
+- Exact Host allowlisting means a reverse proxy or PaaS must set `MCP_HTTP_HOSTS` to the public `Host` value **including the port** when it is non-default. A request whose Host is not listed gets `403` before its body is read.
+- Inspector `--strict` reports 52 portability warnings because zod emits nullable fields as `type: ["string","null"]`. There are 0 errors; the warnings matter only to clients that map schemas onto a single-type OpenAPI dialect.
 - Package is not published to npm; install from source.
 
 ## 11. Submission state vs bounty checklist

@@ -4,7 +4,7 @@ An MCP (Model Context Protocol) server that turns **wemakedevs.org** — a site 
 
 > Built for the TinyFish “Site → MCP” bounty. Not affiliated with WeMakeDevs.
 
-**Live status (2026-11-07):** `npm run health` → **9/9 checks green** against the live site; 26 unit tests green; every tool below exercised through a real MCP stdio client, and the HTTP transport exercised with the SDK's Streamable HTTP client.
+**Live status (2026-11-09):** `npm run health` → **9/9 checks green** against the live site; **31 unit tests** green; **16/16 tools** exercised live through stdio and HTTP. Both MCP protocol eras are served from one tool surface: legacy **2025-11-25** (`initialize`) and modern **2026-07-28** (`server/discover`, per-request metadata). Verified with the official MCP Inspector 2.13 in both eras, and on Node 20 (Alpine, Docker) as well as Node 24.
 
 ## Why this exists
 
@@ -15,7 +15,7 @@ WeMakeDevs runs 30+ hackathons a year, meetups in 9+ cities, community scholarsh
 The package is **not published to npm yet**, so the commands below run the built server directly. Requires Node.js ≥ 20 and a TinyFish API key ([get one](https://agent.tinyfish.ai/api-keys)).
 
 ```bash
-git clone <the URL of this repository> wemakedevs-mcp
+git clone https://github.com/Yash-2003P/wemakedevs-mcp.git
 cd wemakedevs-mcp
 npm ci
 npm run build
@@ -80,7 +80,7 @@ Add `.vscode/mcp.json` (or run **MCP: Add Server**):
 
 ### ChatGPT
 
-ChatGPT connectors expect a **remote HTTP MCP endpoint** with no auth or OAuth. This repo ships both the **stdio** transport (default) and an **Streamable HTTP** transport (`src/http.ts`), so the tools are reachable from remote hosts — but a bearer token is the only auth implemented, which is not a ChatGPT connector protocol yet. Use it from any Streamable HTTP client today, or put an OAuth flow (or an HTTP bridge that streamlines this one) in front of it for ChatGPT. The tools themselves are client-agnostic.
+ChatGPT connectors expect a **remote HTTP MCP endpoint** with OAuth (or no auth). This repo ships both the **stdio** transport (default) and a **Streamable HTTP** transport (`src/http.ts`) that speaks both protocol eras, so the tools are reachable from remote hosts today. A bearer token is the only auth implemented, which is not the OAuth flow ChatGPT connectors require — put an OAuth flow (or an authenticated bridge) in front for ChatGPT. The tools themselves are client-agnostic.
 
 ### Streamable HTTP (remote clients)
 
@@ -92,12 +92,20 @@ HOST=0.0.0.0 MCP_HTTP_TOKEN=secret node dist/src/http.js
 
 Endpoint: `POST /mcp` (stateless: no sessions, no standalone SSE). `GET /health` reports liveness and whether a token is required.
 
+**Protocol eras.** One tool surface serves both:
+
+- **Legacy 2025-11-25** — the `initialize` handshake, answered by the SDK's stateless legacy path.
+- **Modern 2026-07-28** — no `initialize`; `server/discover`, per-request `_meta`, and the required `MCP-Protocol-Version` / `Mcp-Method` headers. Modern clients can call `tools/list` directly once those headers are present.
+
+This is verified with MCP Inspector 2.13 in `--protocol-era legacy` and `--protocol-era modern`, over both stdio and HTTP.
+
 Safety defaults:
 
 - Binds `127.0.0.1` unless `HOST` is set, and **refuses to bind a non-loopback address without `MCP_HTTP_TOKEN`**.
 - `Authorization: Bearer <MCP_HTTP_TOKEN>` is compared with `timingSafeEqual`.
-- Requests with an `Origin` header are rejected unless allowlisted (`MCP_HTTP_ORIGINS`); clients that send none (MCP clients, curl) are unaffected.
-- The transport enforces the Host allowlist (DNS-rebinding protection) using the address this process actually listens on, plus any `MCP_HTTP_HOSTS`.
+- **Origins are parsed, never prefix-matched.** Loopback origins (`http://localhost:5173`, `https://127.0.0.1`, `[::1]`) are allowed on any port; everything else must match an exact `MCP_HTTP_ORIGINS` entry. `http://localhost.evil.com` is rejected.
+- **Host is DNS-rebinding protected with exact values.** The allowlist is built from the actual bind address and port plus `MCP_HTTP_HOSTS`; the incoming `Host` header is never added to its own allowlist. A spoofed Host gets `403` before the body is read.
+- **Bounds:** `MCP_HTTP_MAX_BODY_BYTES` (default 4 MiB) caps request bodies, and `maxToolInputElements: 256` caps combined array/object elements in a `tools/call` payload.
 
 Claude Code, as a remote client:
 
@@ -126,8 +134,8 @@ TINYFISH_API_KEY=sk-... npm run smoke:http
 | `HOST` | `127.0.0.1` | Bind address. Non-loopback requires a token. |
 | `PORT` | `3000` | Bind port. |
 | `MCP_HTTP_TOKEN` | *(unset)* | Required bearer token. Unset = loopback-only, no auth. |
-| `MCP_HTTP_HOSTS` | *(unset)* | Extra allowed `Host` header values (comma-separated), e.g. behind a proxy. |
-| `MCP_HTTP_ORIGINS` | *(unset)* | Extra allowed `Origin` values (comma-separated). |
+| `MCP_HTTP_HOSTS` | *(unset)* | Extra allowed `Host` header values, matched **exactly and including the port** (comma-separated), e.g. `mcp.example.com:443`. |
+| `MCP_HTTP_ORIGINS` | *(unset)* | Extra allowed `Origin` values, matched exactly after URL normalization (comma-separated). |
 | `MCP_HTTP_MAX_BODY_BYTES` | `4194304` | Maximum POST body size. |
 
 ## Tools
@@ -231,7 +239,7 @@ Default state file: `~/.cache/wemakedevs-mcp/hackathon-snapshots.json`. Override
 
 ```bash
 npm ci
-npm test          # builds, then runs 20 unit tests against test/fixtures/*
+npm test          # builds, then runs 31 unit tests against test/fixtures/*
 
 TINYFISH_API_KEY=sk-... npm run smoke       # live: asserts the 16-tool surface, calls every fast tool
 TINYFISH_API_KEY=sk-... npm run smoke:all   # also the slow Agent call (~40–70 s)
@@ -241,6 +249,13 @@ TINYFISH_API_KEY=sk-... npm run smoke:http  # starts the Streamable HTTP server,
 `npm run smoke` starts the built server over stdio with the real MCP SDK client, checks that all 16 tools are advertised, then calls each one once against the live site. It is the fastest way to verify a fresh install (and doubles as a client example).
 
 `test/fixtures/` holds public page snapshots captured 2026-11-05 (plus the RSS feed, schedule, resources and a blog post). Parser tests assert on those; live drift is caught by `npm run health`, not by silently serving stale data.
+
+**Verified environments (2026-11-09):**
+
+- Node **24.21.0** on the host and Node **20.20.2** on Alpine (Docker): `npm ci` → `npm test` → **31/31**; offline health **9/9**.
+- MCP Inspector **2.13.0**, both `--protocol-era legacy` and `--protocol-era modern`, over stdio and HTTP: 16 tools, `tools/list --strict` → **0 errors**, live `tools/call` in modern mode.
+- `npm run smoke` **15/15** fast tools; `npm run smoke:all` **16/16** including the Agent call; `npm run smoke:http` auth rejection + 16 tools + a live call.
+- Live health **9/9**; spoofed `Host` and lookalike `Origin` requests rejected with **403** on the running server.
 
 ## Limitations (honest ones)
 
@@ -252,9 +267,22 @@ TINYFISH_API_KEY=sk-... npm run smoke:http  # starts the Streamable HTTP server,
 - **Archive and external events.** Older events on `archive.wemakedevs.org` are listed and parsed best-effort. External events (Devpost/Luma) are listed with their URLs; `get_hackathon` refuses non-WeMakeDevs hosts by design.
 - **Node package not published.** Install from source until an npm release exists.
 - **Health sentinel** defaults to `switch`; override with `HEALTH_SENTINEL_SLUG` if that page is retired.
-- **The HTTP transport is stateless and POST-only.** No sessions, no standalone SSE stream, no resumability (Ch 5 territory, deliberately out for a read-only tool set). Each POST spawns a short-lived `McpServer`.
+- **The HTTP transport is stateless and POST-only.** No sessions, no standalone SSE stream, no resumability — deliberate for a read-only tool set. Each POST gets a fresh `McpServer`; both protocol eras share the same registrations.
+- **Modern clients must send the spec's headers.** A 2026-07-28 request without `MCP-Protocol-Version` and `Mcp-Method` is rejected by the SDK with a `400` that names the missing header. This is protocol-correct, not a bug.
 - **Auth is a bearer token only.** That covers Claude Code's `-H` header and other Streamable HTTP clients; it is **not** the OAuth flow ChatGPT connectors expect. No OAuth server is implemented.
-- **Browser CORS is closed by default.** A request with an unblessed `Origin` gets 403; allow browser origins explicitly with `MCP_HTTP_ORIGINS`.
+- **Browser CORS is closed by default.** A request with an unblessed `Origin` gets 403. Loopback origins on any port are allowed; other browser origins need an exact `MCP_HTTP_ORIGINS` entry.
+- **Nullable output fields use JSON Schema type arrays.** Inspector `--strict` reports 52 portability warnings (0 errors) because zod emits `type: ["string","null"]` rather than `anyOf`. Hosts that accept JSON Schema 2020-12 are unaffected; a client that maps schemas onto a single-type OpenAPI dialect may drop the null branch.
+
+## Why there is no UI
+
+MCP Apps is an official extension (spec 2026-01-26): a server declares a `ui://` resource, and a supporting host renders it in a sandboxed iframe. It is **optional**, and this server deliberately does not ship one:
+
+- Every tool already returns `structuredContent` plus a text rendering, which Claude, Cursor, OpenCode, Inspector and generic MCP clients display without any server-side UI.
+- MCP Apps only works in hosts that implement the extension; a UI would make the server *less* universal, not more.
+- The bounty scores typed tools and real TinyFish coverage. A timeline iframe would add a bundle, CSP and `postMessage` surface without adding a single capability or TinyFish call.
+- The only genuinely useful future view — a hackathon timeline/registration badge — is presentation over data the tools already expose. It can be added later without changing the tool contracts.
+
+The full decision record is in [docs/UI-ASSESSMENT.md](docs/UI-ASSESSMENT.md).
 
 ## Try it without a TinyFish key (local stub)
 
