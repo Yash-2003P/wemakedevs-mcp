@@ -2,14 +2,15 @@
 
 Bounty: Turn a website with no public API into a permanent agent tool (MCP server). Deadline: **Tue 17 Nov 2026, 11:59 PM PT**.
 
-## Status (2026-11-09)
+## Status (2026-11-14)
 
 - [x] Repo with working build + README (from-source install; npm package not published)
-- [x] 16 typed MCP tools, zod-validated inputs and outputs
-- [x] Live TinyFish **Fetch** path verified against every page (ttl: 0, no canned data)
+- [x] 16 typed MCP tools, zod-validated inputs and outputs; every handler result is parsed against its output schema before return
+- [x] Live TinyFish **Fetch** path verified against every page (ttl: 0, no canned data); listing uses rendered DOM because Fetch strips scripts
 - [x] Live TinyFish **Agent** path verified (`check_registration_status`: state=closed, 7,828 registered in the final run, 22 s; earlier runs 39–62 s)
-- [x] Live `npm run health` → **9/9 green**; offline health → 9/9 green
-- [x] Unit tests → **31/31 green** on Node 24 and Node 20 (Alpine/Docker)
+- [x] Live `npm run health` → **9/9 green**; offline health → 9/9 green; sentinel event is asserted, not merely reported
+- [x] Tests → **31/31 green** (unit + HTTP) on Node 24 and Node 20 (Alpine/Docker)
+- [x] Offline end-to-end smoke: `npm run smoke:stub` → **16/16 tools**, no TinyFish key, no network
 - [x] Clean-clone check from GitHub: `npm ci` → build → 31/31 tests → 9/9 offline health; Inspector legacy + modern pass on the clone
 - [x] Reusable live smoke client: `npm run smoke` (15 fast tools) and `npm run smoke:all` (16/16, Agent included)
 - [x] Streamable HTTP transport (`src/http.ts`, `npm run start:http`): stateless `POST /mcp`, bearer auth, exact Host/Origin allowlists; `npm run smoke:http` green including a live tool call
@@ -29,8 +30,9 @@ Bounty: Turn a website with no public API into a permanent agent tool (MCP serve
 **https://github.com/Yash-2003P/wemakedevs-mcp**
 
 - Branch `main`, remote `origin`, working tree clean.
-- GitHub Actions CI run [42580373658](https://github.com/Yash-2003P/wemakedevs-mcp/actions/runs/42580373658) — `build-test` job green on Node 24.
+- GitHub Actions [CI](https://github.com/Yash-2003P/wemakedevs-mcp/actions/workflows/ci.yml) — `build-test` job runs build, tests, offline health and the offline 16-tool smoke on Node 24.
 - A fresh `git clone` of the public repo passed `npm ci` → `npm test` (31/31) → 9/9 offline health, plus Inspector in both protocol eras.
+- The weekly live-health workflow skips with a notice when `TINYFISH_API_KEY` is not configured; it does not fail the repo.
 - README, [docs/POSTS.md](POSTS.md) and this checklist use the public URL.
 
 ## What the submission notes must say
@@ -55,6 +57,7 @@ Bounty: Turn a website with no public API into a permanent agent tool (MCP serve
 ```bash
 npm ci
 npm test                                         # 31/31
+npm run smoke:stub                               # 16/16 offline tools
 WEMAKEDEVS_MCP_HEALTH_OFFLINE=1 npm run health   # 9/9 offline
 TINYFISH_API_KEY=sk-... npm run health           # 9/9 live
 

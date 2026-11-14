@@ -17,7 +17,7 @@ import {
   parseSectionAst,
   type BlogPostSummary,
 } from './parse.js';
-import { resolveHackathonUrl, originOf } from './util.js';
+import { ALLOWED_WEMAKEDEVS_HOSTS, resolveHackathonUrl, originOf } from './util.js';
 import { diffHackathons, loadSnapshot, saveSnapshot, snapshotFrom } from './diff.js';
 import { runHealthChecks, ALL_TARGETS, type HealthTarget } from './health.js';
 import {
@@ -61,10 +61,19 @@ const asError = (err: unknown): ToolResult => {
 };
 
 const wrap =
-  <A extends Record<string, unknown>>(fn: (args: A) => Promise<unknown>) =>
+  <A extends Record<string, unknown>>(schema: z.ZodType, fn: (args: A) => Promise<unknown>) =>
   async (args: A): Promise<ToolResult> => {
     try {
-      return asStructured(await fn(args));
+      const data = await fn(args);
+      const parsed = schema.safeParse(data);
+      if (!parsed.success) {
+        throw new WemakedevsError('SITE_CHANGED', 'Tool output failed schema validation.', {
+          hint: `Issues: ${parsed.error.issues
+            .map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`)
+            .join('; ')}. Run \`npm run health\` and report this output.`,
+        });
+      }
+      return asStructured(parsed.data);
     } catch (err) {
       return asError(err);
     }
@@ -97,8 +106,6 @@ async function fetchRss(): Promise<string> {
   return fetchHtml(RSS_URL, { selectors: null, minChars: 200 });
 }
 
-const ALLOWED_BLOG_HOSTS = new Set(['www.wemakedevs.org', 'wemakedevs.org', 'archive.wemakedevs.org']);
-
 function resolveBlogUrl(input: string): string {
   const t = (input ?? '').trim();
   let u: URL;
@@ -107,7 +114,7 @@ function resolveBlogUrl(input: string): string {
   } catch {
     throw new WemakedevsError('VALIDATION_FAILED', `Malformed blog URL or slug: ${t}`);
   }
-  if (!ALLOWED_BLOG_HOSTS.has(u.hostname.toLowerCase())) {
+  if (!ALLOWED_WEMAKEDEVS_HOSTS.has(u.hostname.toLowerCase())) {
     throw new WemakedevsError('VALIDATION_FAILED', `Blog posts live on wemakedevs.org; refusing to fetch ${u.host}.`);
   }
   if (!u.pathname.startsWith('/blogs')) {
@@ -156,7 +163,7 @@ export function registerTools(server: McpServer): void {
       outputSchema: HackathonListSchema,
       annotations: { readOnlyHint: true, openWorldHint: true },
     },
-    wrap(async ({ status, format, search, limit }) => {
+    wrap(HackathonListSchema, async ({ status, format, search, limit }) => {
       const html = await fetchHtml(`${WEMMAKEDEVS_ORIGIN}/hackathons`);
       const { items, source } = parseHackathons(html);
       let out = items;
@@ -171,8 +178,9 @@ export function registerTools(server: McpServer): void {
         return (a.startDate ?? '9999').localeCompare(b.startDate ?? '9999');
       });
       const slice = out.slice(0, limit);
-      const notes: string[] = [];
-      if (source === 'dom') notes.push('Parsed from the rendered event cards (site scripts are not exposed by Fetch); display dates without a year are assumed to be the current year.');
+      const notes: string[] = [
+        'Parsed from the rendered event cards (TinyFish Fetch does not expose site scripts); display dates without a year are assumed to be the current year.',
+      ];
       if (status !== 'all' && slice.some((i) => i.status === 'unknown')) {
         notes.push('Includes events with unparseable dates (status="unknown").');
       }
@@ -202,7 +210,7 @@ export function registerTools(server: McpServer): void {
       outputSchema: HackathonDetailSchema,
       annotations: { readOnlyHint: true, openWorldHint: true },
     },
-    wrap(async ({ hackathon, sections }) => {
+    wrap(HackathonDetailSchema, async ({ hackathon, sections }) => {
       const url = resolveHackathonUrl(hackathon);
       const html = await fetchHtml(url);
       const ast = parseSectionAst(html, originOf(url));
@@ -248,7 +256,7 @@ export function registerTools(server: McpServer): void {
       outputSchema: RulesSchema,
       annotations: { readOnlyHint: true, openWorldHint: true },
     },
-    wrap(async ({ hackathon }) => {
+    wrap(RulesSchema, async ({ hackathon }) => {
       const url = resolveHackathonUrl(hackathon).replace(/\/+$/, '');
       const rulesUrl = url.endsWith('/rules') ? url : `${url}/rules`;
       const html = await fetchHtml(rulesUrl);
@@ -271,7 +279,7 @@ export function registerTools(server: McpServer): void {
       outputSchema: RegistrationStatusSchema,
       annotations: { readOnlyHint: true, openWorldHint: true },
     },
-    wrap(async ({ hackathon }) => {
+    wrap(RegistrationStatusSchema, async ({ hackathon }) => {
       const url = resolveHackathonUrl(hackathon);
       const goal =
         `Open ${url} in a real browser session. The "Registration" panel on the page loads client-side and initially shows "Loading…". ` +
@@ -336,7 +344,7 @@ export function registerTools(server: McpServer): void {
       outputSchema: MeetupListSchema,
       annotations: { readOnlyHint: true, openWorldHint: true },
     },
-    wrap(async ({ city, search, limit }) => {
+    wrap(MeetupListSchema, async ({ city, search, limit }) => {
       const html = await fetchHtml(`${WEMMAKEDEVS_ORIGIN}/meetups`);
       let out = parseMeetups(html);
       if (city) {
@@ -367,7 +375,7 @@ export function registerTools(server: McpServer): void {
       outputSchema: CareerListSchema,
       annotations: { readOnlyHint: true, openWorldHint: true },
     },
-    wrap(async ({ limit }) => {
+    wrap(CareerListSchema, async ({ limit }) => {
       const html = await fetchHtml(`${WEMMAKEDEVS_ORIGIN}/careers`);
       const items = parseCareers(html).slice(0, limit);
       return {
@@ -385,12 +393,12 @@ export function registerTools(server: McpServer): void {
     {
       title: 'List WeMakeDevs scholarship programs',
       description:
-        'Current WeMakeDevs scholarship program: coverage (flights, hotel, passes, reimbursement…), application status (open/closed), past winners and FAQs. Parsed live via TinyFish.',
+        'Current WeMakeDevs scholarship program: coverage (flights, hotel, passes, reimbursement…), application status (open/closed), past winners and FAQ questions. FAQ answers are nullable because the accordion bodies are client-rendered and TinyFish Fetch strips scripts. Parsed live via TinyFish.',
       inputSchema: z.object({}),
       outputSchema: ScholarshipSchema,
       annotations: { readOnlyHint: true, openWorldHint: true },
     },
-    wrap(async () => {
+    wrap(ScholarshipSchema, async () => {
       const html = await fetchHtml(`${WEMMAKEDEVS_ORIGIN}/scholarships`);
       return parseScholarships(html);
     }),
@@ -409,9 +417,9 @@ export function registerTools(server: McpServer): void {
       outputSchema: DeadlinesSchema,
       annotations: { readOnlyHint: true, openWorldHint: true },
     },
-    wrap(async ({ within_days }) => {
+    wrap(DeadlinesSchema, async ({ within_days }) => {
       const html = await fetchHtml(`${WEMMAKEDEVS_ORIGIN}/hackathons`);
-      const { items, source } = parseHackathons(html);
+      const { items } = parseHackathons(html);
       const now = Date.now();
       const end = now + within_days * 86_400_000;
       const inWindow = (iso: string | null, inclusiveEnd = false) => {
@@ -432,8 +440,8 @@ export function registerTools(server: McpServer): void {
         asOf: asOf(),
         items: deadlines,
         note:
-          'Meetups and scholarships excluded — the site publishes display-text dates only for those.' +
-          (source === 'dom' ? ' Hackathon dates were read from rendered cards; yearless dates are assumed to be the current year.' : ''),
+          'Meetups and scholarships excluded — the site publishes display-text dates only for those. ' +
+          'Hackathon dates were read from rendered cards; yearless dates are assumed to be the current year.',
       };
     }),
   );
@@ -455,7 +463,7 @@ export function registerTools(server: McpServer): void {
       outputSchema: BlogListSchema,
       annotations: { readOnlyHint: true, openWorldHint: true },
     },
-    wrap(async ({ limit, tag, search }) => {
+    wrap(BlogListSchema, async ({ limit, tag, search }) => {
       const xml = await fetchRss();
       const items = filterBlogPosts(parseBlogRss(xml), { tag, search });
       const slice = items.slice(0, limit);
@@ -480,7 +488,7 @@ export function registerTools(server: McpServer): void {
       outputSchema: BlogListSchema,
       annotations: { readOnlyHint: true, openWorldHint: true },
     },
-    wrap(async ({ query, tag, limit }) => {
+    wrap(BlogListSchema, async ({ query, tag, limit }) => {
       const xml = await fetchRss();
       const items = filterBlogPosts(parseBlogRss(xml), { tag, search: query });
       const slice = items.slice(0, limit);
@@ -502,7 +510,7 @@ export function registerTools(server: McpServer): void {
       outputSchema: BlogPostSchema,
       annotations: { readOnlyHint: true, openWorldHint: true },
     },
-    wrap(async ({ post }) => {
+    wrap(BlogPostSchema, async ({ post }) => {
       const url = resolveBlogUrl(post);
       const [xml, html] = await Promise.all([fetchRss(), fetchHtml(url)]);
       const feedItem = parseBlogRss(xml).find(
@@ -533,7 +541,7 @@ export function registerTools(server: McpServer): void {
       outputSchema: ScheduleSchema,
       annotations: { readOnlyHint: true, openWorldHint: true },
     },
-    wrap(async ({ hackathon }) => {
+    wrap(ScheduleSchema, async ({ hackathon }) => {
       const base = resolveHackathonUrl(hackathon).replace(/\/+$/, '');
       const url = base.endsWith('/schedule') ? base : `${base}/schedule`;
       const html = await fetchHtml(url);
@@ -555,7 +563,7 @@ export function registerTools(server: McpServer): void {
       outputSchema: ResourcesSchema,
       annotations: { readOnlyHint: true, openWorldHint: true },
     },
-    wrap(async ({ hackathon }) => {
+    wrap(ResourcesSchema, async ({ hackathon }) => {
       const base = resolveHackathonUrl(hackathon).replace(/\/+$/, '');
       const url = base.endsWith('/resources') ? base : `${base}/resources`;
       const html = await fetchHtml(url);
@@ -578,7 +586,7 @@ export function registerTools(server: McpServer): void {
       outputSchema: UpdatesSchema,
       annotations: { readOnlyHint: true, openWorldHint: true },
     },
-    wrap(async ({ within_days }) => {
+    wrap(UpdatesSchema, async ({ within_days }) => {
       const span = within_days * 86_400_000;
       const now = Date.now();
       const [xml, listingHtml] = await Promise.all([
@@ -645,10 +653,10 @@ export function registerTools(server: McpServer): void {
       outputSchema: HackathonChangesSchema,
       annotations: { readOnlyHint: true, openWorldHint: true },
     },
-    wrap(async ({ hackathon, update_baseline }) => {
+    wrap(HackathonChangesSchema, async ({ hackathon, update_baseline }) => {
       const { snapshot, warning } = await loadSnapshot();
       const html = await fetchHtml(`${WEMMAKEDEVS_ORIGIN}/hackathons`);
-      const { items, source } = parseHackathons(html);
+      const { items } = parseHackathons(html);
 
       let filterUrl: string | undefined;
       if (hackathon) {
@@ -680,9 +688,7 @@ export function registerTools(server: McpServer): void {
         warning,
         saveWarning,
         update_baseline ? null : 'Baseline left unchanged (update_baseline=false).',
-        source === 'dom'
-          ? 'Cards were read from the rendered listing; yearless dates are assumed to be the current year.'
-          : null,
+        'Cards were read from the rendered listing; yearless dates are assumed to be the current year.',
       ].filter((n): n is string => Boolean(n));
 
       return { ...diff, baselineUpdated, note: notes.join(' ') || null };
@@ -708,7 +714,13 @@ export function registerTools(server: McpServer): void {
       const targets = target === 'all' ? undefined : ([target] as HealthTarget[]);
       try {
         const report = await runHealthChecks({ targets });
-        return { ...asStructured(report), isError: !report.ok };
+        const parsed = HealthReportSchema.safeParse(report);
+        if (!parsed.success) {
+          throw new WemakedevsError('SITE_CHANGED', 'Health report failed schema validation.', {
+            hint: parsed.error.issues.map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`).join('; '),
+          });
+        }
+        return { ...asStructured(parsed.data), isError: !report.ok };
       } catch (err) {
         return asError(err);
       }

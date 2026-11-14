@@ -9,7 +9,7 @@ You shared the table of contents of an MCP book (Python edition). I do not have 
 | Area | Status after implementation | Matters for the bounty? |
 |---|---|---|
 | STDIO server, typed tools, schemas | Implemented (16 tools, zod) | Yes — done |
-| Tests and a real client | 31 unit tests + live smoke for both transports; Inspector in both protocol eras | Yes — done |
+| Tests and a real client | 31 tests (unit + HTTP) + offline 16-tool smoke + live smoke for both transports; Inspector in both protocol eras | Yes — done |
 | Streamable HTTP transport | **Implemented**: stateless `POST /mcp`, legacy 2025-11-25 + modern 2026-07-28, bearer auth, exact Origin/Host allowlists | Yes — closes the remote-client gap; ChatGPT still needs OAuth |
 | SSE transport | Deliberately not implemented | No — legacy, superseded by Streamable HTTP |
 | Resources, prompts, sampling, elicitation | Not implemented | No — the deliverable is tools |
@@ -22,7 +22,7 @@ You shared the table of contents of an MCP book (Python edition). I do not have 
 |---|---|---|---|
 | 1 | Introduction, SOAP → REST → GraphQL → gRPC → MCP | Aligned; the repo exists because the site has no API | None |
 | 2 | Protocol, STDIO, client, initialization, notifications/progress, sampling, SSE, Streamable HTTP | STDIO via `serveStdio` **and** Streamable HTTP via `createMcpHandler`; legacy `initialize` and modern `server/discover` both served; real clients used in tests and demos | No progress notifications; no sampling. Progress heartbeats for the Agent tool remain the only P1 |
-| 3 | Building/testing servers: resources, tools, prompts, runtimes, Inspector, cURL, tests | 16 tools with zod schemas; `node:test`; `scripts/smoke.mjs` calls every tool live; Inspector 2.13 `tools/list --strict` in both eras → 0 errors | No resources/prompts (not needed). The 52 schema-portability warnings are documented (nullable unions), not errors |
+| 3 | Building/testing servers: resources, tools, prompts, runtimes, Inspector, cURL, tests | 16 tools with zod schemas; `node:test`; `scripts/smoke.mjs` calls 15 tools live and `--all` adds the Agent tool; `npm run smoke:stub` calls all 16 offline; Inspector 2.13 `tools/list --strict` in both eras → 0 errors | No resources/prompts (not needed). The 52 schema-portability warnings are documented (nullable unions), not errors |
 | 4 | SSE servers (Starlette) | Not implemented | Skipped: SSE is the legacy transport, superseded by Streamable HTTP |
 | 5 | Streamable HTTP: notifications, resumability | **Implemented stateless** with `createMcpHandler`/`toNodeHandler`: both protocol eras, one short-lived `McpServer` per request, exact Host/Origin checks before body parsing | Resumability/event store deliberately out for a read-only tool surface; 2026-07-28 removed protocol sessions and the GET stream |
 | 6 | Advanced servers: low-level API, context managers, architecture, tool schemas | High-level `McpServer.registerTool`; `tools/parse/schemas/tinyfish/health/diff` split; zod | None; the high-level API is appropriate here |

@@ -17,14 +17,14 @@ import {
 const fixtures = path.join(process.cwd(), 'test', 'fixtures');
 const read = (name: string) => readFileSync(path.join(fixtures, name), 'utf8');
 
-test('parseHackathons: extracts all embedded cards with ISO dates', () => {
+test('parseHackathons: extracts all rendered cards with ISO dates', () => {
   const { items, source } = parseHackathons(read('hackathons.html'), 'https://www.wemakedevs.org', new Date('2026-11-05T00:00:00Z'));
-  assert.equal(source, 'embedded-json');
+  assert.equal(source, 'dom');
   assert.ok(items.length >= 30, `expected >= 30 events, got ${items.length}`);
   for (const item of items) {
     assert.ok(item.title.length > 0);
     assert.ok(item.url.startsWith('http'));
-    assert.match(item.startDate ?? '', /^\d{4}-\d{2}-\d{2}T/);
+    assert.match(item.startDate ?? '', /^\d{4}-\d{2}-\d{2}/);
     assert.ok(['upcoming', 'ongoing', 'past', 'unknown'].includes(item.status));
     assert.ok(['online', 'in-person', 'hybrid', 'unknown'].includes(item.kind));
   }

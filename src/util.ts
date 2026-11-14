@@ -1,7 +1,12 @@
 import { WemakedevsError } from './errors.js';
 import { WEMMAKEDEVS_ORIGIN } from './parse.js';
 
-const ALLOWED_DETAIL_HOSTS = new Set(['www.wemakedevs.org', 'wemakedevs.org', 'archive.wemakedevs.org']);
+/** Every host this server will read hackathon or blog content from. */
+export const ALLOWED_WEMAKEDEVS_HOSTS = new Set([
+  'www.wemakedevs.org',
+  'wemakedevs.org',
+  'archive.wemakedevs.org',
+]);
 
 /**
  * Accepts a slug ("switch"), a site path ("/hackathons/switch") or a full URL
@@ -26,7 +31,7 @@ export function resolveHackathonUrl(input: string): string {
       throw new WemakedevsError('VALIDATION_FAILED', `Unsupported protocol: ${u.protocol}`);
     }
     const host = u.hostname.toLowerCase();
-    if (!ALLOWED_DETAIL_HOSTS.has(host)) {
+    if (!ALLOWED_WEMAKEDEVS_HOSTS.has(host)) {
       throw new WemakedevsError(
         'VALIDATION_FAILED',
         `Refusing to fetch non-WeMakeDevs host: ${host}.`,

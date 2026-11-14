@@ -17,7 +17,7 @@ export const HackathonSummarySchema = z.object({
 export const HackathonListSchema = z.object({
   count: z.number().int(),
   items: z.array(HackathonSummarySchema),
-  source: z.enum(['embedded-json', 'dom']),
+  source: z.literal('dom'),
   asOf: z.string(),
   note: z.string().nullable(),
 });

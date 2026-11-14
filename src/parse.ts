@@ -1,6 +1,5 @@
 import * as cheerio from 'cheerio';
 import type { CheerioAPI } from 'cheerio';
-import { extractFlightCards, type FlightCard } from './extract.js';
 import { WemakedevsError } from './errors.js';
 
 export const WEMMAKEDEVS_ORIGIN = 'https://www.wemakedevs.org';
@@ -63,28 +62,6 @@ export function computeStatus(startDate: string | null, endDate: string | null, 
   if (!Number.isNaN(start) && t < start) return 'upcoming';
   if (!Number.isNaN(end) && t > end) return 'past';
   return 'ongoing';
-}
-
-function cardToSummary(card: FlightCard, origin: string, now: Date): HackathonSummary | null {
-  const title = cleanText(card.title);
-  const url = absoluteUrl(card.href ?? undefined, origin);
-  if (!title || !url) return null;
-  const formats = (card.formats ?? []).map((f) => String(f));
-  const startDate = card.startDate ?? null;
-  const endDate = card.endDate ?? null;
-  return {
-    title,
-    url,
-    location: cleanText(card.location) || null,
-    formats,
-    kind: hackathonKind(formats),
-    prize: cleanText(card.prize) || null,
-    dateText: cleanText(card.date) || null,
-    startDate,
-    endDate,
-    status: computeStatus(startDate, endDate, now),
-    external: Boolean(card.isExternal),
-  };
 }
 
 const MONTH_INDEX: Record<string, number> = {
@@ -216,18 +193,12 @@ function parseHackathonCardsDom(html: string, origin: string, now: Date): Hackat
 
 export interface HackathonParseResult {
   items: HackathonSummary[];
-  source: 'embedded-json' | 'dom';
+  /** Kept in the public shape for compatibility; TinyFish Fetch strips scripts, so this is always DOM. */
+  source: 'dom';
 }
 
 export function parseHackathons(html: string, origin: string = WEMMAKEDEVS_ORIGIN, now: Date = new Date()): HackathonParseResult {
-  const cards = extractFlightCards(html);
-  const source: HackathonParseResult['source'] = cards ? 'embedded-json' : 'dom';
-  let items: HackathonSummary[];
-  if (cards) {
-    items = cards.map((c) => cardToSummary(c, origin, now)).filter((x): x is HackathonSummary => x !== null);
-  } else {
-    items = parseHackathonCardsDom(html, origin, now);
-  }
+  let items = parseHackathonCardsDom(html, origin, now);
   // De-duplicate by url, preserving order.
   const seen = new Set<string>();
   items = items.filter((x) => (seen.has(x.url) ? false : (seen.add(x.url), true)));
@@ -237,7 +208,7 @@ export function parseHackathons(html: string, origin: string = WEMMAKEDEVS_ORIGI
       hint: 'The page structure likely changed. Run `npm run health` and report the failure output.',
     });
   }
-  return { items, source };
+  return { items, source: 'dom' };
 }
 
 // ---------- Meetups ----------
@@ -552,10 +523,10 @@ export function extractHackathonMeta(html: string): HackathonMeta {
   };
 }
 
-// ---------- Scholarships: Radix accordion answers from RSC flight data ----------
-// The Radix answer regions render empty; the answers live in the flight payload
-// as dangerouslySetInnerHTML.__html. We locate each question button, then grab
-// the next \_\_html blob. Answers come back as decoded plain text or null.
+// ---------- Scholarships: Radix accordion answers ----------
+// The answer regions render empty and their bodies are client-rendered. Live
+// Fetch strips scripts, so `answer` is normally null. This best-effort parser
+// still recovers answers from raw snapshots that retain the RSC flight payload.
 export function extractScholarshipFaqs(html: string, $: CheerioAPI): Array<{ question: string; answer: string | null }> {
   const questions: string[] = [];
   $('button[aria-controls]').each((_, b) => {

@@ -16,3 +16,5 @@ jobs:
       - run: npm test
       - name: Offline health check (fixtures)
         run: WEMAKEDEVS_MCP_HEALTH_OFFLINE=1 npm run health
+      - name: Offline end-to-end smoke (16 tools, stub)
+        run: npm run smoke:stub

@@ -117,7 +117,21 @@ export async function runHealthChecks(opts: HealthOptions = {}): Promise<HealthR
       if (bad) throw new WemakedevsError('SITE_CHANGED', `Card with missing title/url: ${JSON.stringify(bad)}`);
       const withDates = items.filter((i) => i.startDate).length;
       if (withDates === 0) throw new WemakedevsError('SITE_CHANGED', 'No hackathon card yielded a machine-readable start date.');
-      return `${items.length} events parsed (${source}); ${withDates} with ISO dates; sentinel present: ${items.some((i) => /switch/i.test(i.url))}`;
+      const hasSentinel = items.some((i) => {
+        try {
+          return new URL(i.url).pathname === `/hackathons/${SENTINEL_SLUG}`;
+        } catch {
+          return false;
+        }
+      });
+      if (!hasSentinel) {
+        throw new WemakedevsError(
+          'SITE_CHANGED',
+          `Sentinel hackathon "${SENTINEL_SLUG}" is missing from the listing.`,
+          { hint: `If that event was retired, set HEALTH_SENTINEL_SLUG to a current event slug.` },
+        );
+      }
+      return `${items.length} events parsed (${source}); ${withDates} with ISO dates; sentinel "${SENTINEL_SLUG}" present`;
     }));
   }
 
@@ -203,7 +217,8 @@ export async function runHealthChecks(opts: HealthOptions = {}): Promise<HealthR
       if (!info.program) throw new WemakedevsError('SITE_CHANGED', 'Could not identify the scholarship program name.');
       if (info.covers.length === 0) throw new WemakedevsError('SITE_CHANGED', 'Could not parse the "What it covers" list.');
       if (info.faqs.length === 0) throw new WemakedevsError('SITE_CHANGED', 'Could not parse any scholarship FAQs.');
-      return `program="${(info.program ?? '(none)').slice(0, 60)}"; status=${info.status}; ${info.covers.length} coverage items; ${info.winners.length} past winners; ${info.faqs.length} FAQs`;
+      const answers = info.faqs.filter((f) => f.answer).length;
+      return `program="${(info.program ?? '(none)').slice(0, 60)}"; status=${info.status}; ${info.covers.length} coverage items; ${info.winners.length} past winners; ${info.faqs.length} FAQ questions; ${answers} answers exposed by Fetch`;
     }));
   }
 

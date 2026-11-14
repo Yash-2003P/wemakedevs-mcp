@@ -13,7 +13,19 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - name: Check for TinyFish key
+        id: key
+        env:
+          TINYFISH_API_KEY: ${{ secrets.TINYFISH_API_KEY }}
+        run: |
+          if [ -z "$TINYFISH_API_KEY" ]; then
+            echo "::notice title=Live health skipped::TINYFISH_API_KEY is not configured; add the repository secret to enable the weekly live check."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
       - name: Live health check against wemakedevs.org
+        if: steps.key.outputs.skip != 'true'
         env:
           TINYFISH_API_KEY: ${{ secrets.TINYFISH_API_KEY }}
         run: npm run health

@@ -32,6 +32,7 @@
     "stub": "node scripts/stub-tinyfish.mjs",
     "smoke": "npm run build && node scripts/smoke.mjs",
     "smoke:all": "npm run build && node scripts/smoke.mjs --all",
+    "smoke:stub": "npm run build && node scripts/smoke-stub.mjs",
     "start:http": "node dist/src/http.js",
     "smoke:http": "npm run build && node scripts/smoke-http.mjs"
   },

@@ -6,7 +6,7 @@ An MCP (Model Context Protocol) server that turns **wemakedevs.org** — a site 
 
 > Built for the TinyFish “Site → MCP” bounty. Not affiliated with WeMakeDevs.
 
-**Live status (2026-11-09):** `npm run health` → **9/9 checks green** against the live site; **31 unit tests** green; **16/16 tools** exercised live through stdio and HTTP. Both MCP protocol eras are served from one tool surface: legacy **2025-11-25** (`initialize`) and modern **2026-07-28** (`server/discover`, per-request metadata). Verified with the official MCP Inspector 2.13 in both eras, and on Node 20 (Alpine, Docker) as well as Node 24.
+**Live status (2026-11-14):** `npm run health` → **9/9 checks green** against the live site; **31 tests** (unit + HTTP) green; **16/16 tools** exercised offline through the fixture stub, and **15/15 fast tools + the Agent tool** exercised live through stdio and HTTP. Both MCP protocol eras are served from one tool surface: legacy **2025-11-25** (`initialize`) and modern **2026-07-28** (`server/discover`, per-request metadata). Verified with the official MCP Inspector 2.13 in both eras, and on Node 20 (Alpine, Docker) as well as Node 24.
 
 ## Why this exists
 
@@ -103,6 +103,7 @@ This is verified with MCP Inspector 2.13 in `--protocol-era legacy` and `--proto
 
 Safety defaults:
 
+- **Terminate TLS before exposing the port.** The server speaks plain HTTP; a public deployment needs a TLS-terminating proxy (or a private network) so the bearer token never crosses the wire in clear text.
 - Binds `127.0.0.1` unless `HOST` is set, and **refuses to bind a non-loopback address without `MCP_HTTP_TOKEN`**.
 - `Authorization: Bearer <MCP_HTTP_TOKEN>` is compared with `timingSafeEqual`.
 - **Origins are parsed, never prefix-matched.** Loopback origins (`http://localhost:5173`, `https://127.0.0.1`, `[::1]`) are allowed on any port; everything else must match an exact `MCP_HTTP_ORIGINS` entry. `http://localhost.evil.com` is rejected.
@@ -152,7 +153,7 @@ TINYFISH_API_KEY=sk-... npm run smoke:http
 | `check_registration_status` | The registration panel is client-side and cannot be read with a plain fetch. **TinyFish Agent** opens a real browser, waits for the panel to resolve and reports `open` / `closed` / `upcoming` / `unknown` + dates + registered count. Read-only — never signs in or registers. |
 | `list_meetups` | Meetups with venue/city, date text and Luma link. Filter by `city` / `search`. |
 | `list_open_roles` | Live openings from `/careers` (title, location, type, compensation, posting date). Returns `[]` with a note when the page shows its empty state. |
-| `list_scholarships` | Current scholarship program: coverage (flights, hotel, pass, local transport, visa), application status, past winners, FAQs. |
+| `list_scholarships` | Current scholarship program: coverage (flights, hotel, pass, local transport, visa), application status, past winners, FAQ questions. FAQ `answer` is nullable: the accordion bodies are client-rendered and Fetch strips scripts. |
 | `list_blog_posts` | Posts from the live blog RSS feed (`/blogs/rss.xml`): title, canonical URL, date, summary, author, tags. Filter by tag or search. |
 | `search_blog` | Full-text search across the same feed (title, summary, author, tags). |
 | `get_blog_post` | One full post: RSS metadata merged with the live article body — paragraphs, every outbound link, author, date, tags. |
@@ -219,7 +220,7 @@ Nine checks, all required:
 
 | Check | Asserts |
 |---|---|
-| `hackathons-listing` | ≥ 10 cards, embedded source or rendered DOM, ≥ 1 ISO start date, sentinel event present |
+| `hackathons-listing` | ≥ 10 rendered cards, ≥ 1 ISO start date, sentinel event **asserted** (missing sentinel fails the check) |
 | `hackathon-detail` | h1, ≥ 4 `section[id]`, prizes section, ≥ 3 FAQ entries |
 | `hackathon-schedule` | ≥ 4 milestones, at least one machine-readable `<time datetime>` |
 | `hackathon-resources` | ≥ 3 groups, ≥ 8 links |
@@ -229,7 +230,7 @@ Nine checks, all required:
 | `scholarships` | program, coverage list and FAQs all parse |
 | `blog-rss` | ≥ 1 item, parseable `pubDate` |
 
-The CLI prints a per-check JSON report and exits non-zero on any failure. The MCP tool `health_check` exposes the same checks to agents (`isError: true` when unhealthy). CI runs build + tests + offline health on every push; a weekly workflow runs the live check when `secrets.TINYFISH_API_KEY` is configured.
+The CLI prints a per-check JSON report and exits non-zero on any failure. The MCP tool `health_check` exposes the same checks to agents (`isError: true` when unhealthy). CI runs build + tests + offline health + an offline 16-tool smoke on every push; a weekly workflow runs the live check when `secrets.TINYFISH_API_KEY` is configured, and skips with a notice when it is not.
 
 ## Change history (diffs)
 
@@ -241,20 +242,21 @@ Default state file: `~/.cache/wemakedevs-mcp/hackathon-snapshots.json`. Override
 
 ```bash
 npm ci
-npm test          # builds, then runs 31 unit tests against test/fixtures/*
+npm test          # builds, then runs 31 tests (unit + HTTP) against test/fixtures/*
+npm run smoke:stub  # offline: starts the fixture stub, calls all 16 tools
 
-TINYFISH_API_KEY=sk-... npm run smoke       # live: asserts the 16-tool surface, calls every fast tool
-TINYFISH_API_KEY=sk-... npm run smoke:all   # also the slow Agent call (~40–70 s)
+TINYFISH_API_KEY=sk-... npm run smoke       # live: 15 fast tools (Agent skipped)
+TINYFISH_API_KEY=sk-... npm run smoke:all   # live: 16/16 including the Agent call (~40–70 s)
 TINYFISH_API_KEY=sk-... npm run smoke:http  # starts the Streamable HTTP server, checks auth + a live call
 ```
 
-`npm run smoke` starts the built server over stdio with the real MCP SDK client, checks that all 16 tools are advertised, then calls each one once against the live site. It is the fastest way to verify a fresh install (and doubles as a client example).
+`npm run smoke` starts the built server over stdio with the real MCP SDK client, checks that all 16 tools are advertised, then calls the 15 fast tools once against the live site. `npm run smoke:all` adds `check_registration_status`; `npm run smoke:stub` runs all 16 against local fixtures with no key. The scripts double as client examples.
 
 `test/fixtures/` holds public page snapshots captured 2026-11-05 (plus the RSS feed, schedule, resources and a blog post). Parser tests assert on those; live drift is caught by `npm run health`, not by silently serving stale data.
 
 **Verified environments (2026-11-09):**
 
-- Node **24.21.0** on the host and Node **20.20.2** on Alpine (Docker): `npm ci` → `npm test` → **31/31**; offline health **9/9**.
+- Node **24.21.0** on the host and Node **20.20.2** on Alpine (Docker): `npm ci` → `npm test` → **31/31**; offline health **9/9**; `npm run smoke:stub` → **16/16** tools.
 - MCP Inspector **2.13.0**, both `--protocol-era legacy` and `--protocol-era modern`, over stdio and HTTP: 16 tools, `tools/list --strict` → **0 errors**, live `tools/call` in modern mode.
 - `npm run smoke` **15/15** fast tools; `npm run smoke:all` **16/16** including the Agent call; `npm run smoke:http` auth rejection + 16 tools + a live call.
 - Live health **9/9**; spoofed `Host` and lookalike `Origin` requests rejected with **403** on the running server.
@@ -264,6 +266,7 @@ TINYFISH_API_KEY=sk-... npm run smoke:http  # starts the Streamable HTTP server,
 - **Listing dates are inferred from display text.** The site does not expose ISO dates in the rendered listing (scripts are stripped by Fetch). A display date without a year is assumed to be the current year; the site prints a year for other years. `dateText` is always returned verbatim alongside the inferred ISO dates.
 - **The listing parser depends on the card DOM.** If WeMakeDevs redesigns the event cards, `health_check` fails with the exact check and reason instead of returning partial garbage.
 - **Agent latency is 20–120 s.** MCP clients must allow a request timeout of at least ~120 s for `check_registration_status`; the server itself has no timeout. Observed live: 39 s, 41 s and 62 s — the last one exceeds the SDK's default 60 s client timeout. `npm run smoke:all` sets 180 s.
+- **Scholarship FAQ answers are usually `null`.** The question buttons render server-side, but the answer bodies are client-rendered; Fetch strips scripts, so the live page exposes questions only. The schema keeps `answer` nullable and the health check reports how many answers (normally 0) were exposed.
 - **Meetup dates are display text** (“Oct 27”), not ISO; they are excluded from `upcoming_deadlines`.
 - **`/careers` can legitimately be empty.** The live page said “No open roles right now” during the final run; the tool returns `[]` with a note rather than inventing roles.
 - **Archive and external events.** Older events on `archive.wemakedevs.org` are listed and parsed best-effort. External events (Devpost/Luma) are listed with their URLs; `get_hackathon` refuses non-WeMakeDevs hosts by design.
